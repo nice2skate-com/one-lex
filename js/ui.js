@@ -55,13 +55,25 @@
   }
   const RULE_FIELDS = { title: 'Titel', artist: 'Artist', album: 'Album', genre: 'Genre', comment: 'Kommentar', tags: 'Tags', key: 'Tonart', bpm: 'BPM', year: 'Jahr', rating: 'Bewertung', duration: 'Dauer (Sek.)', playCount: 'Wiedergaben', energy: 'Energie', addedDays: 'Hinzugefügt vor (Tagen)' };
   const RULE_NUM = new Set(['bpm', 'year', 'rating', 'duration', 'playCount', 'energy', 'addedDays']);
+  const ACTIONS = { play: ['Wiedergabe / Pause', 'Space'], load: ['Auswahl ins Deck laden', 'Enter'], memory: ['Memory-Cue setzen', 'KeyM'], panel: ['Cues & Raster öffnen', 'KeyE'],
+    zoom: ['Wellenform-Zoom', 'KeyZ'], match: ['Passende Titel anzeigen', 'KeyH'], analyze: ['Auswahl analysieren', 'KeyA'], search: ['Suche', 'Slash'] };
+  const keyLabel = c => c === 'None' ? '–' : c === 'Space' ? 'Leertaste' : c === 'Slash' ? '/' : c.replace(/^(Key|Digit)/, '');
   const RULE_OPS = { has: 'enthält', hasnt: 'enthält nicht', is: 'ist', isnt: 'ist nicht', gt: 'größer als', lt: 'kleiner als' };
+
+  const D = window.oneDesktop || null; // nur in der Desktop-App vorhanden
+  const isAbs = p => /^(\/|[A-Za-z]:[\\/])/.test(p || '');
+  const toAB = u => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength);
+  /* Datei auf der Platte (Desktop-App): verhält sich für Tag-Leser, Analyse und Tag-Schreiber wie ein File-Objekt */
+  const dfile = (path, size) => ({ path, size, name: path.replace(/\\/g, '/').split('/').pop(), url: 'one://file/' + encodeURIComponent(path),
+    slice(a, b) { return { arrayBuffer: async () => toAB(await D.read(path, a || 0, Math.min(b == null ? size : b, size))) }; },
+    arrayBuffer: async () => toAB(await D.read(path, 0, size)) });
+  const ditems = list => list.map(f => ({ file: dfile(f.path, f.size), path: f.path, desktop: true }));
 
   const S = {
     tracks: new Map(), lists: [], roots: [], files: new Map(),
     view: { type: 'all' }, sel: new Set(), anchor: null, sort: { f: 'added', d: -1 }, q: '', rows: [],
-    settings: { keyMode: 'camelot', basePath: '', quantize: true, volume: 0.9, theme: 'dark', normalize: false, cols: { hidden: [], shown: [], order: [], w: {} }, sorts: {} },
-    cur: null, curWave: null, busy: null, dupes: null, loop: null, click: false, panel: false
+    settings: { keyMode: 'camelot', basePath: '', quantize: true, volume: 0.9, theme: 'dark', normalize: false, cols: { hidden: [], shown: [], order: [], w: {} }, sorts: {}, keys: {} },
+    cur: null, curWave: null, busy: null, dupes: null, loop: null, click: false, panel: false, zoom: false, curHi: null
   };
   const audio = new Audio();
   let audioUrl = null;
@@ -85,7 +97,7 @@
   const saveTracks = ts => DB.putMany('tracks', ts);
   const saveList = l => DB.put('lists', l);
   const keyShow = k => Keys.show(k, S.settings.keyMode);
-  const connected = t => S.files.has(t.id) || (!!t.root && S.roots.some(r => r.id === t.root));
+  const connected = t => D ? isAbs(t.path) : S.files.has(t.id) || (!!t.root && S.roots.some(r => r.id === t.root));
   const isMissing = t => !connected(t) || !!t.missing;
   const absPath = t => /^(\/|[A-Za-z]:[\\/])/.test(t.path) ? t.path : (S.settings.basePath || '').replace(/[\\/]*$/, '/') + t.path;
   const selected = () => S.rows.filter(t => S.sel.has(t.id));
@@ -98,6 +110,7 @@
     if (typeof x === 'string' || typeof y === 'string') return String(x || '').localeCompare(String(y || ''), 'de', { sensitivity: 'base', numeric: true });
     return (x || 0) - (y || 0);
   };
+  const keyOf = a => S.settings.keys[a] || ACTIONS[a][1];
   const viewKey = v => v.type + ':' + (v.id || '');
   const applyTheme = () => { document.body.dataset.theme = S.settings.theme || 'dark'; };
 
@@ -162,6 +175,11 @@
   }
   /* Schreibbarer Zugriff auf die Originaldatei (nur Chrome/Edge, nur über gewählte Ordner oder Dateien) */
   async function writableOf(t, ask) {
+    if (D) {
+      const file = await fileOf(t);
+      let data = null;
+      return file && { getFile: async () => file, createWritable: async () => ({ write: async d => { data = d; }, close: () => D.write(t.path, data) }) };
+    }
     const f = S.files.get(t.id);
     if (f && f.createWritable) return (await perm(f, ask, 'readwrite')) ? f : null;
     const root = t.root && S.roots.find(r => r.id === t.root);
@@ -172,6 +190,7 @@
     return dir.getFileHandle(parts[parts.length - 1]);
   }
   async function fileOf(t, ask) {
+    if (D) { const st = isAbs(t.path) ? await D.stat(t.path) : null; return st ? dfile(t.path, st.size) : null; }
     const f = S.files.get(t.id);
     if (f instanceof File) return f;
     if (f && f.getFile) return (await perm(f, ask)) ? f.getFile() : null;
@@ -200,6 +219,12 @@
   }
 
   async function pickFolder() {
+    if (D) {
+      const dir = await D.pickFolder();
+      if (!dir) return;
+      status('Ordner wird gelesen …');
+      return addItems(ditems(await D.scan(dir)));
+    }
     if (window.showDirectoryPicker) {
       let h;
       try { h = await window.showDirectoryPicker({ mode: 'read' }); } catch { return; }
@@ -208,6 +233,7 @@
     } else $('#pickDir').click();
   }
   async function pickFiles() {
+    if (D) return addItems(ditems(await D.pickFiles()));
     if (window.showOpenFilePicker) {
       let hs;
       try { hs = await window.showOpenFilePicker({ multiple: true }); } catch { return; }
@@ -239,14 +265,15 @@
       } else {
         const tag = await Tags.read(file);
         t = { id: uid(), title: tag.title, artist: tag.artist || '', album: tag.album || '', genre: tag.genre || '', year: tag.year, comment: tag.comment || '',
-          bpm: tag.bpm, key: Keys.parse(tag.key), duration: await Tags.duration(file), rating: 0, color: '', tags: [], cues: [], gridStart: 0,
+          bpm: tag.bpm, key: Keys.parse(tag.key), duration: await Tags.duration(file), rating: 0, color: '', tags: [], cues: tag.cues || [], gridStart: 0,
           path: it.path, size: file.size, added: Date.now(), playCount: 0, analyzed: false };
         S.tracks.set(t.id, t);
         bySize.set(n + '|' + file.size, t);
         await storeCover(t, tag.picture);
         added++;
       }
-      if (it.root) { t.root = it.root; t.rel = it.rel; if (!/^(\/|[A-Za-z]:)/.test(t.path)) t.path = it.path; }
+      if (it.desktop) t.path = it.path;
+      else if (it.root) { t.root = it.root; t.rel = it.rel; if (!/^(\/|[A-Za-z]:)/.test(t.path)) t.path = it.path; }
       else {
         S.files.set(t.id, it.handle || file);
         if (it.handle) await DB.put('handles', it.handle, t.id);
@@ -312,8 +339,9 @@
         if (!t.cover) await storeCover(t, (await Tags.read(f)).picture);
         t.analyzed = true; delete t.missing;
         await DB.put('waves', r.wave, t.id);
+        await DB.put('waves', r.waveHi, t.id + '~hi');
         await DB.put('tracks', t);
-        if (S.cur === t) { S.curWave = r.wave; drawWave(); renderDeck(); }
+        if (S.cur === t) { S.curWave = r.wave; S.curHi = r.waveHi; drawWave(); renderDeck(); }
         ok++;
         drawRows();
       } catch (e) { fail++; }
@@ -364,6 +392,7 @@
   }
 
   function ruleMatch(t, c) {
+    if (c.conds) return c.match === 'any' ? c.conds.some(x => ruleMatch(t, x)) : c.conds.every(x => ruleMatch(t, x));
     const now = Date.now();
     if (RULE_NUM.has(c.field)) {
       const v = c.field === 'addedDays' ? (now - (t.added || now)) / 864e5 : +t[c.field] || 0, x = parseFloat(String(c.value).replace(',', '.')) || 0;
@@ -658,23 +687,29 @@
   async function editSmart(list) {
     const l = list || { id: uid(), type: 'smart', name: '', rules: { match: 'all', conds: [{ field: 'genre', op: 'has', value: '' }] } };
     const row = c => `<div class="rule"><select class="in" data-k="field">${Object.entries(RULE_FIELDS).map(([k, v]) => `<option value="${k}"${c.field === k ? ' selected' : ''}>${v}</option>`).join('')}</select><select class="in" data-k="op">${Object.entries(RULE_OPS).map(([k, v]) => `<option value="${k}"${c.op === k ? ' selected' : ''}>${v}</option>`).join('')}</select><input class="in" data-k="value" value="${esc(c.value)}"><button type="button" class="btn ghost icon" data-delrule aria-label="Regel entfernen">${IC.x}</button></div>`;
+    const group = c => `<div class="rgroup"><div class="row"><span class="lbl">Gruppe:</span><select class="in" data-k="gmatch"><option value="any">mindestens eine Regel</option><option value="all"${c.match === 'all' ? ' selected' : ''}>alle Regeln</option></select><button type="button" class="btn sm" data-addin>${IC.plus} Regel</button><button type="button" class="btn ghost icon sm" data-delgroup aria-label="Gruppe entfernen">${IC.x}</button></div><div class="grules">${c.conds.map(row).join('')}</div></div>`;
+    const read = r => ({ field: $('[data-k=field]', r).value, op: $('[data-k=op]', r).value, value: $('[data-k=value]', r).value.trim() });
     const f = await modal({
       title: list ? 'Smartlist bearbeiten' : 'Neue Smartlist', wide: true,
       body: `<label class="field"><span class="lbl">Name</span><input class="in" name="name" required value="${esc(l.name)}"></label>
         <label class="field"><span class="lbl">Titel aufnehmen, wenn</span><select class="in" name="match"><option value="all"${l.rules.match === 'all' ? ' selected' : ''}>alle Regeln zutreffen</option><option value="any"${l.rules.match === 'any' ? ' selected' : ''}>mindestens eine Regel zutrifft</option></select></label>
-        <div id="rules">${l.rules.conds.map(row).join('')}</div><button type="button" class="btn" id="addRule">${IC.plus} Regel</button>
+        <div id="rules">${l.rules.conds.map(c => c.conds ? group(c) : row(c)).join('')}</div><div class="row"><button type="button" class="btn" id="addRule">${IC.plus} Regel</button><button type="button" class="btn" id="addGroup">${IC.plus} Gruppe</button></div>
         <div class="grid3"><label class="field"><span class="lbl">Höchstens (Titel)</span><input class="in" name="limit" type="number" min="0" value="${l.rules.limit || ''}" placeholder="unbegrenzt"></label>
           <label class="field"><span class="lbl">Auswahl nach</span><select class="in" name="sortBy">${[['added', 'Hinzugefügt'], ['lastPlayed', 'Zuletzt gespielt'], ['playCount', 'Wiedergaben'], ['rating', 'Bewertung'], ['bpm', 'BPM'], ['energy', 'Energie'], ['year', 'Jahr']].map(([k, v]) => `<option value="${k}"${l.rules.sortBy === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
           <label class="field"><span class="lbl">Richtung</span><select class="in" name="sortDir"><option value="-1">höchste / neueste zuerst</option><option value="1"${l.rules.sortDir === 1 ? ' selected' : ''}>niedrigste / älteste zuerst</option></select></label></div>`,
       onOpen: ov => ov.addEventListener('click', e => {
-        if (e.target.closest('#addRule')) $('#rules', ov).insertAdjacentHTML('beforeend', row({ field: 'bpm', op: 'gt', value: '' }));
+        const blank = { field: 'bpm', op: 'gt', value: '' };
+        if (e.target.closest('#addRule')) $('#rules', ov).insertAdjacentHTML('beforeend', row(blank));
+        if (e.target.closest('#addGroup')) $('#rules', ov).insertAdjacentHTML('beforeend', group({ match: 'any', conds: [blank] }));
+        const a = e.target.closest('[data-addin]'); if (a) $('.grules', a.closest('.rgroup')).insertAdjacentHTML('beforeend', row(blank));
+        const g = e.target.closest('[data-delgroup]'); if (g) return g.closest('.rgroup').remove();
         const d = e.target.closest('[data-delrule]'); if (d) d.parentElement.remove();
       })
     });
     if (!f) return;
     snap('Smartlist');
     l.name = f.name.value.trim() || 'Smartlist';
-    l.rules = { match: f.match.value, limit: parseInt(f.limit.value, 10) || 0, sortBy: f.sortBy.value, sortDir: +f.sortDir.value, conds: $$('.rule', f).map(r => ({ field: $('[data-k=field]', r).value, op: $('[data-k=op]', r).value, value: $('[data-k=value]', r).value.trim() })).filter(c => c.value !== '') };
+    l.rules = { match: f.match.value, limit: parseInt(f.limit.value, 10) || 0, sortBy: f.sortBy.value, sortDir: +f.sortDir.value, conds: [...$('#rules', f).children].map(el => el.classList.contains('rgroup') ? { match: $('[data-k=gmatch]', el).value, conds: $$('.rule', el).map(read).filter(c => c.value !== '') } : read(el)).filter(c => c.conds ? c.conds.length : c.value !== '') };
     if (!list) S.lists.push(l);
     await saveList(l);
     setView({ type: 'list', id: l.id });
@@ -764,9 +799,9 @@
     const sel = selected();
     if (!sel.length) return toast('Zuerst Titel auswählen.', true);
     const ok = sel.filter(t => TagWrite.supported(fileName(t)));
-    if (!ok.length) return toast('Schreiben geht bei MP3 und FLAC – in der Auswahl ist keine solche Datei.', true);
+    if (!ok.length) return toast('In der Auswahl ist keine Datei, deren Typ sich beschreiben lässt (MP3, FLAC, M4A, WAV, AIFF).', true);
     if (S.busy) return toast('Bitte warten, es läuft noch ein Vorgang.', true);
-    if (!(await modal({ title: 'Tags in Dateien schreiben', ok: 'Schreiben', body: `<p>Titel, Artist, Album, Genre, Jahr, BPM, Tonart und Kommentar werden in <b>${nf(ok.length)}</b> Audiodatei${ok.length === 1 ? '' : 'en'} geschrieben${ok.length < sel.length ? ` (${nf(sel.length - ok.length)} andere Dateitypen werden übersprungen)` : ''}.</p><p class="mut">Die Originaldateien werden dabei geändert; Cover und fremde Angaben bleiben erhalten. Das lässt sich nicht rückgängig machen. Der Browser fragt gleich nach Schreibzugriff auf den Musikordner.</p>` }))) return;
+    if (!(await modal({ title: 'Tags in Dateien schreiben', ok: 'Schreiben', body: `<p>Titel, Artist, Album, Genre, Jahr, BPM, Tonart und Kommentar werden in <b>${nf(ok.length)}</b> Audiodatei${ok.length === 1 ? '' : 'en'} geschrieben${ok.length < sel.length ? ` (${nf(sel.length - ok.length)} andere Dateitypen werden übersprungen)` : ''}.</p><p class="mut">Die Originaldateien werden dabei geändert; Cover und fremde Angaben bleiben erhalten. Das lässt sich nicht rückgängig machen.${D ? '' : ' Der Browser fragt gleich nach Schreibzugriff auf den Musikordner.'}</p>` }))) return;
     const job = S.busy = { stop: false }, fails = new Map();
     let done = 0;
     for (let i = 0; i < ok.length && !job.stop; i++) {
@@ -796,9 +831,23 @@
   const normFactor = t => S.settings.normalize && t && typeof t.loud === 'number' ? Math.max(0.2, Math.min(1, Math.pow(10, (-14 - t.loud) / 20))) : 1;
   const applyVol = () => { audio.volume = Math.max(0, Math.min(1, S.settings.volume * normFactor(S.cur))); };
 
+  /* Beatraster: erster Abschnitt ab gridStart mit t.bpm, danach optionale Tempowechsel t.tempos = [{ t, bpm }] */
+  const sections = t => [{ t: t.gridStart || 0, bpm: t.bpm }, ...(t.tempos || [])].filter(s => s.bpm > 0);
+  function sectionAt(t, pos) { let s = null; for (const x of sections(t)) if (!s || x.t <= pos + 1e-6) s = x; return s; }
+  const snapBeat = (t, pos) => { const s = sectionAt(t, pos); if (!s) return pos; const b = 60 / s.bpm; return Math.max(0, Math.round((pos - s.t) / b) * b + s.t); };
+  function eachBeat(t, from, to, fn) {
+    const ss = sections(t);
+    ss.forEach((s, i) => {
+      const b = 60 / s.bpm, end = Math.min(to, i + 1 < ss.length ? ss[i + 1].t : Infinity);
+      let k = Math.ceil((from - s.t) / b - 1e-6);
+      if (i > 0 && k < 0) k = 0;
+      for (; s.t + k * b < end - 1e-6; k++) fn(s.t + k * b, k);
+    });
+  }
+
   function panelHtml(t) {
-    const beat = t.bpm ? 60 / t.bpm : 0;
-    const row = (c, i) => `<div class="crow" data-i="${i}"><button type="button" class="cbadge" data-ccolor style="--c:${cueColor(c)}" title="Farbe wechseln">${c.n >= 0 ? c.n + 1 : 'M'}</button><button type="button" class="ctime" data-cgo title="Anspringen">${time2(c.t)}</button><input class="in" data-cname value="${esc(c.name)}" placeholder="Name" aria-label="Cue-Name"><select class="in" data-clen ${beat ? '' : 'disabled'} aria-label="Loop-Länge">${[0, 4, 8, 16, 32].map(b => `<option value="${b}"${beat && Math.round((c.len || 0) / beat) === b ? ' selected' : ''}>${b ? b + ' Beats' : 'kein Loop'}</option>`).join('')}</select><button type="button" class="btn ghost icon sm" data-cdel aria-label="Cue löschen">${IC.x}</button></div>`;
+    const beat = t.bpm ? 60 / t.bpm : 0, beatAt = c => { const s = sectionAt(t, c.t); return s ? 60 / s.bpm : 0; };
+    const row = (c, i) => `<div class="crow" data-i="${i}"><button type="button" class="cbadge" data-ccolor style="--c:${cueColor(c)}" title="Farbe wechseln">${c.n >= 0 ? c.n + 1 : 'M'}</button><button type="button" class="ctime" data-cgo title="Anspringen">${time2(c.t)}</button><input class="in" data-cname value="${esc(c.name)}" placeholder="Name" aria-label="Cue-Name"><select class="in" data-clen ${beat ? '' : 'disabled'} aria-label="Loop-Länge">${[0, 4, 8, 16, 32].map(b => `<option value="${b}"${beat && Math.round((c.len || 0) / beatAt(c)) === b ? ' selected' : ''}>${b ? b + ' Beats' : 'kein Loop'}</option>`).join('')}</select><button type="button" class="btn ghost icon sm" data-cdel aria-label="Cue löschen">${IC.x}</button></div>`;
     return `<div class="dpanel scroll" id="dpanel">
       <div class="sh">Beatraster</div>
       <div class="gridrow"><label class="field"><span class="lbl">BPM</span><input class="in" id="gBpm" type="number" step="any" value="${t.bpm || ''}"></label>
@@ -806,7 +855,9 @@
         <button type="button" class="btn sm" data-grid="-10" title="Raster 10 ms früher">◀◀</button><button type="button" class="btn sm" data-grid="-1" title="Raster 1 ms früher">◀</button>
         <button type="button" class="btn sm" data-grid="1" title="Raster 1 ms später">▶</button><button type="button" class="btn sm" data-grid="10" title="Raster 10 ms später">▶▶</button>
         <button type="button" class="btn sm" data-grid="here" title="Beat an die aktuelle Position legen">Beat hier</button>
-        <button type="button" class="btn sm${S.click ? ' active' : ''}" data-grid="click" title="Klick auf jeden Beat zum Prüfen des Rasters">Klick</button></div>
+        <button type="button" class="btn sm${S.click ? ' active' : ''}" data-grid="click" title="Klick auf jeden Beat zum Prüfen des Rasters">Klick</button>
+        <button type="button" class="btn sm" data-grid="tempo" title="Ab der aktuellen Position gilt ein anderes Tempo">Tempowechsel hier</button></div>
+      ${(t.tempos || []).map((x, i) => `<div class="trow" data-i="${i}"><span class="mut">ab ${time2(x.t)}</span><input class="in" data-tbpm type="number" step="any" value="${x.bpm}" aria-label="BPM ab hier"><span class="mut">BPM</span><button type="button" class="btn ghost icon sm" data-tdel aria-label="Tempowechsel entfernen">${IC.x}</button></div>`).join('')}
       <div class="sh">Cues<span class="row"><button type="button" class="btn sm" id="cSuggest">Vorschlagen</button><button type="button" class="btn sm" id="cMem">+ Memory-Cue</button></span></div>
       ${(t.cues || []).map(row).join('') || '<div class="hint">Noch keine Cues. Tasten 1–8 setzen Hot Cues an der aktuellen Position.</div>'}</div>`;
   }
@@ -821,7 +872,7 @@
         <div class="dm"><span id="dtime">${time(audio.currentTime)}</span> / ${time(t.duration)}${t.bpm ? ` · <b>${(Math.round(t.bpm * 10) / 10).toLocaleString('de-DE')}</b> BPM` : ''}${t.key ? ` · <b>${esc(keyShow(t.key))}</b>` : ''}</div></div>
       <div class="dwave"><canvas id="wave"></canvas></div>
       <div class="dside"><div class="cues">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => { const c = (t.cues || []).find(x => x.n === n); return `<button class="cue${c ? ' set' : ''}${c && c.len ? ' lp' : ''}${c && S.loop === c ? ' active' : ''}" data-cue="${n}" style="--c:${c ? cueColor(c) : CUE_COLORS[n]}" title="${c ? esc((c.name ? c.name + ' · ' : '') + time2(c.t) + (c.len ? ' · Loop' : '')) + ' · Rechtsklick löscht' : 'Cue an aktueller Position setzen'}">${n + 1}</button>`; }).join('')}</div>
-        <div class="row"><button class="btn sm${S.panel ? ' active' : ''}" id="bEdit">Cues &amp; Raster</button><button class="btn sm" id="bMatch" ${t.key ? '' : 'disabled'}>Passende Titel</button><input type="range" id="vol" min="0" max="1" step="0.01" value="${S.settings.volume}" aria-label="Lautstärke"></div></div>
+        <div class="row"><button class="btn sm${S.panel ? ' active' : ''}" id="bEdit">Cues &amp; Raster</button><button class="btn sm" id="bMatch" ${t.key ? '' : 'disabled'} title="Passende Titel nach Tonart und Tempo">Passend</button><button class="btn sm${S.zoom ? ' active' : ''}" id="bZoom" title="Ausschnitt um die aktuelle Position">Zoom</button><input type="range" id="vol" min="0" max="1" step="0.01" value="${S.settings.volume}" aria-label="Lautstärke"></div></div>
       ${S.panel ? panelHtml(t) : ''}`;
     fillCovers(el);
     drawWave();
@@ -839,6 +890,31 @@
     const ink = S.settings.theme === 'light' ? '17,19,21' : '244,240,232';
     const dur = t.duration || audio.duration || 0, pos = dur ? audio.currentTime / dur : 0, mid = h / 2;
     const wave = S.curWave;
+    const mark = (c, x) => {
+      g.fillStyle = cueColor(c); g.fillRect(x, 0, 2, h);
+      if (c.n < 0) { g.beginPath(); g.moveTo(x - 4, 0); g.lineTo(x + 6, 0); g.lineTo(x + 1, 8); g.fill(); return; }
+      g.fillRect(x, 0, 13, 13);
+      g.fillStyle = '#111315'; g.font = '600 10px "Fira Sans", sans-serif'; g.textAlign = 'center'; g.fillText(c.n + 1, x + 7, 10);
+    };
+    if (S.zoom && dur) { // Ausschnitt von 8 Sekunden um die aktuelle Position, mit jedem Beat
+      const span = 8, ct = audio.currentTime, a = ct - span / 2, hi = S.curHi || wave, X = tm => (tm - a) / span * w;
+      for (const c of t.cues || []) if (c.len) { g.fillStyle = cueColor(c); g.globalAlpha = S.loop === c ? 0.34 : 0.16; g.fillRect(X(c.t), 0, c.len / span * w, h); g.globalAlpha = 1; }
+      if (hi) for (let x = 0; x < w; x++) {
+        const tm = a + x / w * span;
+        if (tm < 0 || tm > dur) continue;
+        const v = hi[Math.min(hi.length - 1, Math.floor(tm / dur * hi.length))] / 255;
+        g.fillStyle = tm < ct ? '#B79A6B' : `rgba(${ink},.5)`;
+        g.fillRect(x, mid - v * (mid - 3), 1, Math.max(1, v * (h - 6)));
+      }
+      if (t.bpm) eachBeat(t, Math.max(0, a), Math.min(dur, a + span), (tm, k) => {
+        const bar = ((k % 4) + 4) % 4 === 0;
+        g.fillStyle = `rgba(${ink},${bar ? 0.6 : 0.25})`;
+        g.fillRect(Math.round(X(tm)), bar ? 0 : h * 0.22, 1, bar ? h : h * 0.56);
+      });
+      for (const c of t.cues || []) { const x = Math.round(X(c.t)); if (x > -16 && x < w) mark(c, x); }
+      g.fillStyle = `rgb(${ink})`; g.fillRect(Math.round(w / 2), 0, 1.5, h);
+      return;
+    }
     if (dur) for (const c of t.cues || []) if (c.len) { // Loop-Bereiche
       g.fillStyle = cueColor(c); g.globalAlpha = S.loop === c ? 0.34 : 0.16;
       g.fillRect(c.t / dur * w, 0, Math.max(2, c.len / dur * w), h);
@@ -856,18 +932,13 @@
       g.fillStyle = `rgba(${ink},.7)`; g.font = '12px "Fira Sans", sans-serif'; g.textAlign = 'center';
       g.fillText('Noch keine Wellenform – Titel analysieren', w / 2, mid - 10);
     }
-    if (dur && t.bpm) { // Taktstriche alle 16 Beats
+    if (dur && t.bpm) { // Taktstriche alle 16 Beats, Tempowechsel hervorgehoben
       g.fillStyle = `rgba(${ink},.16)`;
-      const step = 60 / t.bpm * 16;
-      for (let s = t.gridStart || 0; s < dur; s += step) g.fillRect(Math.round(s / dur * w), 0, 1, h);
+      eachBeat(t, 0, dur, (tm, k) => { if (k % 16 === 0) g.fillRect(Math.round(tm / dur * w), 0, 1, h); });
+      g.fillStyle = '#B79A6B';
+      for (const x of t.tempos || []) g.fillRect(Math.round(x.t / dur * w), h - 6, 2, 6);
     }
-    if (dur) for (const c of t.cues || []) {
-      const x = Math.round(c.t / dur * w);
-      g.fillStyle = cueColor(c); g.fillRect(x, 0, 2, h);
-      if (c.n < 0) { g.beginPath(); g.moveTo(x - 4, 0); g.lineTo(x + 6, 0); g.lineTo(x + 1, 8); g.fill(); continue; }
-      g.fillRect(x, 0, 13, 13);
-      g.fillStyle = '#111315'; g.font = '600 10px "Fira Sans", sans-serif'; g.textAlign = 'center'; g.fillText(c.n + 1, x + 7, 10);
-    }
+    if (dur) for (const c of t.cues || []) mark(c, Math.round(c.t / dur * w));
     g.fillStyle = `rgb(${ink})`; g.fillRect(Math.round(pos * w), 0, 1.5, h);
   }
 
@@ -880,21 +951,22 @@
     }
     if (t.missing) { delete t.missing; await DB.put('tracks', t); }
     if (audioUrl) URL.revokeObjectURL(audioUrl);
-    audioUrl = URL.createObjectURL(f);
+    audioUrl = f.url ? null : URL.createObjectURL(f);
     S.cur = t; S.curCounted = false; S.loop = null; lastBeat = -1;
     S.curWave = await DB.get('waves', t.id) || null;
-    audio.src = audioUrl;
+    S.curHi = await DB.get('waves', t.id + '~hi') || null;
+    audio.src = f.url || audioUrl;
     applyVol();
     renderDeck(); drawRows();
     if (autoplay) audio.play().catch(() => {});
   }
-  function unload() { audio.pause(); audio.removeAttribute('src'); S.cur = null; S.curWave = null; S.loop = null; renderDeck(); drawRows(); }
+  function unload() { audio.pause(); audio.removeAttribute('src'); S.cur = null; S.curWave = null; S.curHi = null; S.loop = null; renderDeck(); drawRows(); }
   const toggle = () => { if (S.cur) audio.paused ? audio.play().catch(() => {}) : audio.pause(); };
 
   function cuePos() {
     const t = S.cur;
     let pos = audio.currentTime;
-    if (S.settings.quantize && t.bpm) { const b = 60 / t.bpm; pos = Math.max(0, Math.round((pos - (t.gridStart || 0)) / b) * b + (t.gridStart || 0)); }
+    if (S.settings.quantize && t.bpm) pos = snapBeat(t, pos);
     return Math.round(pos * 1000) / 1000;
   }
   async function saveCur() { await DB.put('tracks', S.cur); renderDeck(); }
@@ -916,7 +988,7 @@
     snap('Cue bearbeiten', [t]);
     if (what === 'del') { t.cues.splice(i, 1); if (S.loop === c) S.loop = null; }
     else if (what === 'name') c.name = value.trim();
-    else if (what === 'len') { const b = +value; if (b && t.bpm) c.len = Math.round(b * 60 / t.bpm * 1000) / 1000; else { delete c.len; if (S.loop === c) S.loop = null; } }
+    else if (what === 'len') { const b = +value, s = sectionAt(t, c.t); if (b && s) c.len = Math.round(b * 60 / s.bpm * 1000) / 1000; else { delete c.len; if (S.loop === c) S.loop = null; } }
     else if (what === 'color') { const k = CUE_COLORS.indexOf(cueColor(c)); c.color = CUE_COLORS[(k + 1) % CUE_COLORS.length]; }
     await saveCur();
   }
@@ -934,6 +1006,25 @@
     const t = S.cur;
     if (!t) return;
     if (op === 'click') { S.click = !S.click; lastBeat = -1; return renderDeck(); }
+    if (op === 'tempo' || op === 'tbpm' || op === 'tdel') { // Tempowechsel anlegen, ändern, entfernen
+      if (!t.bpm) return toast('Zuerst BPM eintragen oder den Titel analysieren.', true);
+      let v = 0, at = 0;
+      if (op === 'tempo') {
+        at = Math.round(snapBeat(t, audio.currentTime) * 1000) / 1000;
+        if (at <= (t.gridStart || 0) + 0.05) return toast('Der Tempowechsel muss nach dem ersten Beat liegen.', true);
+        const f = await modal({ title: `Tempowechsel ab ${time2(at)}`, ok: 'Anlegen', body: `<label class="field"><span class="lbl">Neues Tempo (BPM)</span><input class="in" name="bpm" type="number" step="any" required value="${sectionAt(t, at).bpm}"></label>` });
+        if (!f) return;
+        v = f.bpm.value;
+      } else if (op === 'tbpm') v = value.v;
+      if (op !== 'tdel') { v = Math.round((parseFloat(String(v).replace(',', '.')) || 0) * 100) / 100; if (v < 30 || v > 300) return toast('BPM zwischen 30 und 300 eingeben.', true); }
+      snap('Tempowechsel', [t]);
+      t.tempos = t.tempos || [];
+      if (op === 'tempo') t.tempos = [...t.tempos.filter(x => Math.abs(x.t - at) > 0.05), { t: at, bpm: v }].sort((a, b) => a.t - b.t);
+      else if (op === 'tbpm') t.tempos[value.i].bpm = v;
+      else t.tempos.splice(value.i, 1);
+      if (!t.tempos.length) delete t.tempos;
+      return saveCur();
+    }
     if (op === 'bpm') {
       const v = Math.round((parseFloat(String(value).replace(',', '.')) || 0) * 100) / 100;
       if (v < 30 || v > 300) return toast('BPM zwischen 30 und 300 eingeben.', true);
@@ -941,13 +1032,14 @@
     } else {
       if (!t.bpm) return toast('Zuerst BPM eintragen oder den Titel analysieren.', true);
       snap('Beatraster', [t]);
-      if (op === 'half') t.bpm = Math.round(t.bpm / 2 * 100) / 100;
-      else if (op === 'double') t.bpm = Math.round(t.bpm * 2 * 100) / 100;
+      const k = op === 'half' ? 0.5 : op === 'double' ? 2 : 0;
+      if (k) { t.bpm = Math.round(t.bpm * k * 100) / 100; for (const x of t.tempos || []) x.bpm = Math.round(x.bpm * k * 100) / 100; }
       else if (op === 'here') t.gridStart = audio.currentTime;
-      else t.gridStart = (t.gridStart || 0) + (+op) / 1000;
+      else { t.gridStart = (t.gridStart || 0) + (+op) / 1000; for (const x of t.tempos || []) x.t = Math.round((x.t + (+op) / 1000) * 1000) / 1000; }
     }
     const b = 60 / t.bpm;
     t.gridStart = Math.round(((((t.gridStart || 0) % b) + b) % b) * 1000) / 1000;
+    if (t.tempos) { t.tempos = t.tempos.filter(x => x.t > t.gridStart + 0.05); if (!t.tempos.length) delete t.tempos; }
     await saveCur();
     drawRows();
   }
@@ -997,8 +1089,8 @@
     if (t && !audio.paused) {
       holdLoop();
       if (S.click && t.bpm) {
-        const b = Math.floor((audio.currentTime - (t.gridStart || 0)) / (60 / t.bpm));
-        if (b !== lastBeat) { if (lastBeat !== -1 && b === lastBeat + 1) blip(((b % 4) + 4) % 4 === 0); lastBeat = b; }
+        const s = sectionAt(t, audio.currentTime), k = Math.floor((audio.currentTime - s.t) / (60 / s.bpm)), b = Math.round(s.t * 1000) * 100000 + k;
+        if (b !== lastBeat) { if (lastBeat !== -1 && b === lastBeat + 1) blip(((k % 4) + 4) % 4 === 0); lastBeat = b; }
       }
       drawWave();
     }
@@ -1022,6 +1114,7 @@
     const changed = [], ids = [];
     let added = 0, merged = 0;
     for (const d of data.tracks) {
+      delete d.volume;
       let t = find(d);
       if (t) {
         for (const k of ['title', 'artist', 'album', 'genre', 'comment', 'key']) if (!t[k] && d[k]) t[k] = d[k];
@@ -1066,7 +1159,7 @@
   const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   async function backup() {
     const waves = {};
-    for (const [id, w] of await DB.entries('waves')) waves[id] = b64(w);
+    for (const [id, w] of await DB.entries('waves')) if (!String(id).includes('~')) waves[id] = b64(w);
     download(`one-library-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ app: 'one-library', version: 1, created: new Date().toISOString(), settings: S.settings, tracks: [...S.tracks.values()], lists: S.lists, waves }), 'application/json');
   }
   async function restore(data, auto) {
@@ -1138,15 +1231,171 @@
         <label class="tog"><input type="checkbox" name="quantize"${S.settings.quantize ? ' checked' : ''}><span class="sw"></span><span><span class="tl">Cues am Beatraster einrasten</span><small>Neue Cue-Punkte springen auf den nächsten Beat, sobald der Titel analysiert ist.</small></span></label>
         <label class="tog"><input type="checkbox" name="normalize"${S.settings.normalize ? ' checked' : ''}><span class="sw"></span><span><span class="tl">Lautstärke beim Vorhören angleichen</span><small>Laute Titel werden im Deck leiser wiedergegeben. Die Dateien bleiben unverändert.</small></span></label>
         <label class="field"><span class="lbl">Musikordner auf diesem Rechner (für Exporte)</span><input class="in" name="base" value="${esc(S.settings.basePath)}" placeholder="/Users/name/Music/"></label>
+        <div class="field"><span class="lbl">Bedienung</span><div><button type="button" class="btn sm" id="keysGo">Tastenkürzel anpassen …</button></div></div>
         <div class="field"><span class="lbl">Verbundene Ordner</span>${S.roots.map(r => `<div class="mut">${esc(r.name)}</div>`).join('') || '<div class="mut">Noch keine.</div>'}</div>
         <div class="field"><span class="lbl">Automatische Sicherungen (täglich, die letzten 7)</span>${backups.length ? `<div class="row"><select class="in" id="bkSel">${backups.map(([k, b]) => `<option value="${k}">${new Date(+k).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })} – ${nf(b.tracks.length)} Titel</option>`).join('')}</select><button type="button" class="btn" id="bkGo">Wiederherstellen</button></div>` : '<div class="mut">Noch keine – die erste entsteht beim nächsten Start mit Titeln in der Bibliothek.</div>'}</div>`,
-      onOpen: ov => ov.addEventListener('click', e => { if (e.target.closest('#bkGo')) { pick = backups.find(([k]) => String(k) === $('#bkSel', ov).value); $('[data-x]', ov).click(); } }) });
+      onOpen: ov => ov.addEventListener('click', e => { if (e.target.closest('#keysGo')) { pick = 'keys'; return $('[data-x]', ov).click(); } if (e.target.closest('#bkGo')) { pick = backups.find(([k]) => String(k) === $('#bkSel', ov).value); $('[data-x]', ov).click(); } }) });
+    if (pick === 'keys') return keysDialog();
     if (pick) return restore(pick[1], true).catch(e => toast(e.message, true));
     if (!f) return;
     S.settings.theme = f.theme.value; S.settings.keyMode = f.keyMode.value; S.settings.quantize = f.quantize.checked; S.settings.normalize = f.normalize.checked; S.settings.basePath = f.base.value.trim();
     await saveSettings();
     applyTheme(); applyVol();
     refresh(); renderDeck();
+  }
+
+  /* ---------- Desktop-App: Dateien umbenennen, direkter Abgleich ---------- */
+  async function renameFiles() {
+    const sel = selected().filter(t => isAbs(t.path));
+    if (!sel.length) return toast('Zuerst Titel auswählen.', true);
+    const f = await modal({ title: `${nf(sel.length)} Datei${sel.length === 1 ? '' : 'en'} umbenennen`, ok: 'Umbenennen',
+      body: `<label class="field"><span class="lbl">Muster</span><input class="in" name="pat" required value="%artist% - %title%"><small>Platzhalter: %artist%, %title%, %album%, %genre%, %year%, %bpm%, %key%. Die Dateiendung bleibt.</small></label>
+        <p class="mut">Die Dateien werden auf der Platte umbenannt; das lässt sich hier nicht rückgängig machen. DJ-Software, die die Dateien schon kennt, findet sie erst nach einem erneuten Abgleich wieder.</p>` });
+    if (!f) return;
+    let done = 0, fail = 0;
+    for (const t of sel) {
+      const name = f.pat.value.replace(/%(\w+)%/g, (_, k) => k === 'key' ? keyShow(t.key) : k === 'bpm' ? (t.bpm ? Math.round(t.bpm) : '') : (t[k] == null ? '' : t[k])).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\(\s*\)|\[\s*\]/g, '').replace(/\s+/g, ' ').replace(/^[\s\-–]+|[\s\-–]+$/g, '');
+      const i = Math.max(t.path.lastIndexOf('/'), t.path.lastIndexOf('\\')), ext = (/\.[^.\\/]+$/.exec(t.path) || [''])[0];
+      const to = t.path.slice(0, i + 1) + name + ext;
+      if (!name || name === '-' || to === t.path) continue;
+      try { await D.rename(t.path, to); t.path = to; await DB.put('tracks', t); done++; } catch { fail++; }
+    }
+    dirty();
+    toast(`${nf(done)} Datei${done === 1 ? '' : 'en'} umbenannt.` + (fail ? ` ${nf(fail)} übersprungen (Zielname existiert bereits oder Datei fehlt).` : ''), fail > 0);
+  }
+
+  /* Laufwerk eines Pfads: '' = Systemlaufwerk, sonst /Volumes/Name (Mac) oder X: (Windows). Serato und VirtualDJ führen je Laufwerk eigene Daten. */
+  const volumeOf = (p, P) => {
+    p = p.replace(/\\/g, '/');
+    let m = /^\/Volumes\/[^/]+/.exec(p);
+    if (m) return m[0];
+    m = /^([A-Za-z]:)\//.exec(p);
+    return m && m[1].toLowerCase() !== P.home.slice(0, 2).toLowerCase() ? m[1] : '';
+  };
+  async function syncRun(app, dir) {
+    const P = await D.paths(), all = [...S.tracks.values()].filter(t => isAbs(t.path));
+    const lists = S.lists.map(l => l.type === 'smart' ? { ...l, trackIds: smartTracks(l).map(t => t.id) } : l);
+    const vols = ['', ...new Set(all.map(t => volumeOf(t.path, P)).filter(Boolean))];
+    const sys = P.platform === 'win32' ? P.home.slice(0, 2) : '';
+    const parse = (u8, name) => Formats.parseFile(new File([u8], name));
+    const sets = [];
+    let written = 0, note = '';
+    if (dir === 'write' && !all.length) throw new Error('In der Bibliothek sind noch keine Titel mit vollständigem Pfad.');
+    if (app === 'serato') {
+      for (const v of vols) {
+        const base = (v || P.music) + '/_Serato_';
+        if (dir === 'read') {
+          const fix = d => { for (const t of d.tracks) { if (v && !t.path.startsWith(v)) t.path = v + t.path; else if (!v && sys && t.path.startsWith('/')) t.path = sys + t.path; } return d; };
+          const db = await D.readBin(base + '/database V2');
+          if (db) sets.push(fix(await parse(db, 'database V2')));
+          for (const e of await D.list(base + '/Subcrates')) if (/\.crate$/i.test(e.name)) { const c = await D.readBin(base + '/Subcrates/' + e.name); if (c) sets.push(fix(await parse(c, e.name))); }
+        } else {
+          const ids = new Set(all.filter(t => volumeOf(t.path, P) === v).map(t => t.id));
+          const part = lists.map(l => ({ ...l, trackIds: l.trackIds.filter(id => ids.has(id)) })).filter(l => l.trackIds.length);
+          for (const f of Formats.seratoExport(part, S.tracks, absPath)) { await D.writeBin((v || P.music) + '/' + f.name, f.data, true); written++; }
+        }
+      }
+      if (dir === 'write' && !written) throw new Error('Für Serato werden Playlists übertragen – bitte zuerst eine Playlist mit Titeln anlegen.');
+    } else if (app === 'vdj') {
+      const cands = [P.home + '/Library/Application Support/VirtualDJ', P.home + '/AppData/Local/VirtualDJ', P.documents + '/VirtualDJ'];
+      let main = cands[2];
+      for (const c of cands) if ((await D.list(c)).length) { main = c; break; }
+      for (const v of vols) {
+        const file = (v ? v + '/VirtualDJ' : main) + '/database.xml', old = await D.readBin(file);
+        if (dir === 'read') { if (old) sets.push(await parse(old, 'database.xml')); continue; }
+        const mine = all.filter(t => volumeOf(t.path, P) === v);
+        if (mine.length) { await D.writeBin(file, Formats.vdjMerge(old ? new TextDecoder().decode(old) : '', mine, absPath), true); written++; }
+      }
+      if (dir === 'read') { for (const e of await D.list(main + '/Playlists')) if (/\.(m3u8?|vdjfolder)$/i.test(e.name)) { const c = await D.readBin(main + '/Playlists/' + e.name); if (c) sets.push(await parse(c, e.name)); } }
+      else for (const l of lists.filter(x => x.trackIds.length)) { await D.writeBin(main + '/Playlists/' + Formats.safeName(l.name) + '.m3u', Formats.m3uExport(l.trackIds.map(id => S.tracks.get(id)).filter(Boolean), absPath), true); written++; }
+    } else if (app === 'traktor') {
+      const ni = P.documents + '/Native Instruments';
+      const dirs = (await D.list(ni)).filter(e => e.dir && /^Traktor/i.test(e.name)).map(e => e.name).sort((a, b) => b.localeCompare(a, 'en', { numeric: true }));
+      if (!dirs.length) throw new Error('Kein Traktor-Ordner unter „Dokumente/Native Instruments“ gefunden.');
+      const base = ni + '/' + dirs[0];
+      if (dir === 'read') {
+        const c = await D.readBin(base + '/collection.nml');
+        if (!c) throw new Error('In ' + base + ' liegt keine collection.nml.');
+        const d = await parse(c, 'collection.nml');
+        // Titel auf anderen Laufwerken (Mac): Traktor nennt nur den Laufwerksnamen
+        for (const t of d.tracks) if (t.volume && !/^[A-Za-z]:$/.test(t.volume) && !(await D.stat(t.path)) && await D.stat('/Volumes/' + t.volume + t.path)) t.path = '/Volumes/' + t.volume + t.path;
+        sets.push(d);
+      } else {
+        await D.writeBin(base + '/ONE Library.nml', Formats.traktorExport(all, lists, absPath), true); written++;
+        note = 'In Traktor: Rechtsklick auf „Track Collection“ → „Import Another Collection …“ und die Datei „ONE Library.nml“ im Traktor-Ordner wählen.';
+      }
+    } else {
+      const file = P.documents + '/ONE Library/rekordbox.xml';
+      if (dir === 'read') {
+        const c = await D.readBin(file);
+        if (!c) throw new Error('Bitte in rekordbox „Datei → Sammlung im xml-Format exportieren“ wählen und hier speichern: ' + file);
+        sets.push(await parse(c, 'rekordbox.xml'));
+      } else {
+        await D.writeBin(file, Formats.rekordboxExport(all, lists, absPath), true); written++;
+        note = 'In rekordbox einmalig unter Einstellungen → Erweitert → Datenbank → „rekordbox xml“ diese Datei eintragen: ' + file + '. Danach erscheint die Bibliothek dort im Baum unter „rekordbox xml“.';
+      }
+    }
+    if (dir === 'write') return { text: `${nf(written)} Datei${written === 1 ? '' : 'en'} geschrieben. Ersetzte Dateien wurden vorher als Kopie gesichert.`, note };
+    if (!sets.length) throw new Error('Keine Daten dieser DJ-Software gefunden.');
+    sets.sort((a, b) => (b.full ? 1 : 0) - (a.full ? 1 : 0));
+    let added = 0, merged = 0, nl = 0;
+    for (const d of sets) { const r = await mergeData(d); added += r.added; merged += r.merged; nl += r.lists; }
+    dirty();
+    return { text: `${nf(added)} neue Titel, ${nf(merged)} abgeglichen, ${nf(nl)} Playlists.`, note };
+  }
+  async function syncDialog() {
+    const f = await modal({ title: 'Direkter Abgleich mit DJ-Software', ok: 'Ausführen',
+      body: `<label class="field"><span class="lbl">Programm</span><select class="in" name="app"><option value="serato">Serato</option><option value="vdj">VirtualDJ</option><option value="traktor">Traktor</option><option value="rekordbox">rekordbox</option></select></label>
+        <label class="field"><span class="lbl">Richtung</span><select class="in" name="dir"><option value="read">Aus der DJ-Software einlesen</option><option value="write">In die DJ-Software schreiben</option></select></label>
+        <p class="mut">Die DJ-Software sollte dabei geschlossen sein. Vor dem Schreiben wird jede Datei, die ersetzt wird, als Kopie daneben gesichert. Serato erhält die Playlists als Crates, VirtualDJ wird ergänzt statt ersetzt; Traktor und rekordbox übernehmen eine Austauschdatei.</p>` });
+    if (!f) return;
+    if (S.busy) return toast('Bitte warten, es läuft noch ein Vorgang.', true);
+    status('Abgleich läuft …');
+    try {
+      const r = await syncRun(f.app.value, f.dir.value);
+      status();
+      if (r.note) await modal({ title: 'Abgleich abgeschlossen', ok: 'OK', body: `<p>${esc(r.text)}</p><p class="mut">${esc(r.note)}</p>` });
+      else toast(r.text);
+    } catch (e) { status(); toast(e.message || 'Abgleich fehlgeschlagen.', true); }
+  }
+
+  function runAction(a) {
+    const sel = selected();
+    switch (a) {
+      case 'play': return toggle();
+      case 'load': return sel[0] && load(sel[0]);
+      case 'memory': return memoryCue();
+      case 'panel': if (S.cur) { S.panel = !S.panel; renderDeck(); } return;
+      case 'zoom': if (S.cur) { S.zoom = !S.zoom; renderDeck(); } return;
+      case 'match': return S.cur && S.cur.key && setView({ type: 'match', id: S.cur.id });
+      case 'analyze': return sel.length && analyze(sel);
+      default: return $('#q').select();
+    }
+  }
+  async function keysDialog() {
+    const keys = { ...S.settings.keys };
+    const cur = a => keys[a] || ACTIONS[a][1];
+    let wait = null;
+    const f = await modal({ title: 'Tastenkürzel',
+      body: `<p class="mut">Auf eine Taste klicken und die neue Taste drücken. Fest belegt bleiben: 1–8 (Hot Cues), Pfeiltasten, Entf, Strg/⌘+Z, +A, +F.</p>${Object.entries(ACTIONS).map(([a, [label]]) => `<div class="krow"><span>${label}</span><button type="button" class="btn sm" data-key="${a}">${esc(keyLabel(cur(a)))}</button></div>`).join('')}<button type="button" class="btn sm" id="keysReset">Standard wiederherstellen</button>`,
+      onOpen: ov => {
+        const paint = () => $$('[data-key]', ov).forEach(b => { b.textContent = wait === b.dataset.key ? 'Taste drücken …' : keyLabel(cur(b.dataset.key)); b.classList.toggle('active', wait === b.dataset.key); });
+        ov.addEventListener('click', e => {
+          const b = e.target.closest('[data-key]');
+          if (b) { wait = b.dataset.key; paint(); }
+          if (e.target.closest('#keysReset')) { for (const a of Object.keys(keys)) delete keys[a]; wait = null; paint(); }
+        });
+        ov.addEventListener('keydown', e => {
+          if (!wait || e.key === 'Escape' || e.key === 'Tab' || /^(Shift|Control|Alt|Meta)/.test(e.code)) return;
+          e.preventDefault(); e.stopPropagation();
+          if (/^Digit[1-8]$|^Arrow|^Delete$|^Backspace$/.test(e.code)) return toast('Diese Taste ist fest belegt.', true);
+          for (const a of Object.keys(ACTIONS)) if (a !== wait && cur(a) === e.code) keys[a] = 'None'; // Doppelbelegung auflösen
+          keys[wait] = e.code; wait = null; paint();
+        }, true);
+      } });
+    if (!f) return;
+    S.settings.keys = keys;
+    await saveSettings();
   }
 
   /* ---------- Ereignisse ---------- */
@@ -1327,7 +1576,7 @@
         { head: 'Auswahl bearbeiten' },
         { l: 'Suchen & Ersetzen …', fn: findReplace }, { l: 'Titel/Artist aus Dateiname', fn: fromFileName },
         { l: 'Groß-/Kleinschreibung bereinigen', fn: () => batch('caps') }, { l: 'Artist und Titel tauschen', fn: () => batch('swap') }, { l: 'Leerzeichen bereinigen', fn: () => batch('trim') },
-        { l: 'Tags in Dateien schreiben (MP3, FLAC) …', fn: writeTags }, null,
+        { l: 'Tags in Dateien schreiben …', fn: writeTags }, ...(D ? [{ l: 'Dateien umbenennen …', fn: renameFiles }] : []), null,
         { head: 'Bibliothek' },
         { l: 'Dateien prüfen (fehlende finden)', fn: checkFiles }, { l: 'Duplikate anzeigen', fn: () => setView({ type: 'dupes' }) }, { l: 'Duplikate zusammenführen …', fn: mergeDupes }
       ]);
@@ -1335,7 +1584,7 @@
     });
     $('#bIO').addEventListener('click', e => {
       const r = e.currentTarget.getBoundingClientRect();
-      menu(r.left, r.bottom + 4, [{ l: 'Importieren (Rekordbox, Traktor, Serato, VirtualDJ, M3U, Backup) …', fn: () => $('#pickImport').click() }, { l: 'Exportieren …', fn: exportDialog }, null, { l: 'Backup jetzt speichern', fn: backup }]);
+      menu(r.left, r.bottom + 4, [{ l: 'Importieren (Rekordbox, Traktor, Serato, VirtualDJ, M3U, Backup) …', fn: () => $('#pickImport').click() }, { l: 'Exportieren …', fn: exportDialog }, null, { l: 'Backup jetzt speichern', fn: backup }, ...(D ? [null, { l: 'Direkter Abgleich mit DJ-Software …', fn: syncDialog }] : [])]);
       e.stopPropagation();
     });
     $('#bSet').addEventListener('click', settingsDialog);
@@ -1361,6 +1610,9 @@
       if (c) return cue(+c.dataset.cue, e.altKey || e.shiftKey);
       if (e.target.closest('#bMatch')) return setView({ type: 'match', id: S.cur.id });
       if (e.target.closest('#bEdit')) { S.panel = !S.panel; return renderDeck(); }
+      if (e.target.closest('#bZoom')) { S.zoom = !S.zoom; return renderDeck(); }
+      const td = e.target.closest('[data-tdel]');
+      if (td) return grid('tdel', { i: +td.closest('.trow').dataset.i });
       const g = e.target.closest('[data-grid]');
       if (g) return grid(g.dataset.grid);
       if (e.target.closest('#cSuggest')) return suggestCues();
@@ -1374,7 +1626,8 @@
       }
       if (e.target.id === 'wave' && S.cur) {
         const r = e.target.getBoundingClientRect(), dur = S.cur.duration || audio.duration;
-        if (dur) { audio.currentTime = (e.clientX - r.left) / r.width * dur; S.loop = null; lastBeat = -1; drawWave(); }
+        const frac = (e.clientX - r.left) / r.width;
+        if (dur) { audio.currentTime = Math.max(0, Math.min(dur - 0.05, S.zoom ? audio.currentTime - 4 + frac * 8 : frac * dur)); S.loop = null; lastBeat = -1; drawWave(); }
       }
     });
     deck.addEventListener('change', e => {
@@ -1382,6 +1635,7 @@
       if (row && e.target.matches('[data-cname]')) return cueEdit(+row.dataset.i, 'name', e.target.value);
       if (row && e.target.matches('[data-clen]')) return cueEdit(+row.dataset.i, 'len', e.target.value);
       if (e.target.id === 'gBpm') grid('bpm', e.target.value);
+      if (e.target.matches('[data-tbpm]')) grid('tbpm', { i: +e.target.closest('.trow').dataset.i, v: e.target.value });
     });
     deck.addEventListener('contextmenu', e => { const c = e.target.closest('[data-cue]'); if (c) { e.preventDefault(); cue(+c.dataset.cue, true); } });
     deck.addEventListener('input', e => { if (e.target.id === 'vol') { S.settings.volume = +e.target.value; applyVol(); saveSettings(); } });
@@ -1405,10 +1659,12 @@
       if (typing || $('.ov')) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
       if (e.key === 'Escape') return closeMenu();
-      if (e.code === 'Space') { e.preventDefault(); return toggle(); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); S.sel = new Set(S.rows.map(t => t.id)); drawRows(); renderInspector(); return renderCount(); }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); return moveSel(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey); }
-      if (e.key === 'Enter') { const t = selected()[0]; if (t) load(t); return; }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+        const act = Object.keys(ACTIONS).find(a => keyOf(a) === e.code);
+        if (act) { e.preventDefault(); return runAction(act); }
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); return removeSelected(); }
       const d = /^Digit([1-8])$/.exec(e.code);
       if (d && !e.metaKey && !e.ctrlKey) cue(+d[1] - 1, e.shiftKey);
@@ -1426,6 +1682,7 @@
       const dt = e.dataTransfer, items = [];
       const data = [...dt.files].filter(f => /\.(xml|nml|m3u8?|json|crate|vdjfolder)$/i.test(f.name) || /^database V2$/i.test(f.name));
       if (data.length) return importData(data);
+      if (D) { status('Ordner wird gelesen …'); return addItems(ditems(await D.expand([...dt.files].map(f => D.pathOf(f)).filter(Boolean)))); }
       if (dt.items && dt.items[0] && dt.items[0].getAsFileSystemHandle) {
         const hs = await Promise.all([...dt.items].filter(i => i.kind === 'file').map(i => i.getAsFileSystemHandle()));
         status('Ordner wird gelesen …');
@@ -1449,7 +1706,7 @@
       S.lists = lists;
       S.settings = { ...S.settings, ...(settings || {}) };
       S.settings.cols = { hidden: [], shown: [], order: [], w: {}, ...(S.settings.cols || {}) };
-      S.settings.sorts = S.settings.sorts || {};
+      S.settings.sorts = S.settings.sorts || {}; S.settings.keys = S.settings.keys || {};
       S.roots = roots || [];
       for (const [id, h] of handles) S.files.set(id, h);
     } catch (e) { toast('Der lokale Speicher des Browsers ist nicht verfügbar – Änderungen gehen beim Schließen verloren.', true); }
@@ -1462,7 +1719,7 @@
     // Aufräumen: Daten zu entfernten Titeln löschen, danach die tägliche Sicherung
     try {
       for (const store of ['waves', 'covers', 'handles']) {
-        const gone = (await DB.entries(store)).map(([k]) => k).filter(k => !S.tracks.has(k));
+        const gone = (await DB.entries(store)).map(([k]) => k).filter(k => !S.tracks.has(String(k).split('~')[0]));
         if (gone.length) { await DB.delMany(store, gone); for (const k of gone) S.files.delete(k); }
       }
       await autoBackup();

@@ -183,7 +183,7 @@ const Analyze = (() => {
     const loud = Math.round(10 * Math.log10(sum / Math.max(1, x.length) + 1e-12) * 10) / 10;
     const n = (v, a, b) => Math.max(0, Math.min(1, (v - a) / (b - a)));
     const energy = Math.round(1 + 9 * (0.7 * n(loud, -26, -8) + 0.3 * n(t.bpm || 120, 90, 150)));
-    return { duration: buf.duration, wave: peaks(x), bpm: t.bpm, gridStart: t.gridStart, key: key(x, buf.sampleRate), loud, energy };
+    return { duration: buf.duration, wave: peaks(x), waveHi: peaks(x, Math.min(60000, Math.max(1200, Math.ceil(buf.duration * 100)))), bpm: t.bpm, gridStart: t.gridStart, key: key(x, buf.sampleRate), loud, energy };
   }
 
   return { run, tempo, key };

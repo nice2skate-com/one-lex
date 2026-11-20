@@ -1,0 +1,23 @@
+{
+  "name": "one-library",
+  "productName": "ONE Library",
+  "version": "1.0.0",
+  "description": "DJ KOLJA ONE · Library – Desktop-App",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "one.djkolja.library",
+    "productName": "ONE Library",
+    "files": ["main.js", "preload.js", { "from": "..", "to": "web", "filter": ["index.html", "css/**", "js/**", "assets/**", "vendor/**"] }],
+    "mac": { "category": "public.app-category.music", "target": "dmg" },
+    "win": { "target": "nsis" }
+  }
+}

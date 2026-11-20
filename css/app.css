@@ -162,3 +162,9 @@ body[data-theme=light] .stars s { color: rgba(17, 19, 21, .2); }
 .cbadge { height: 30px; border-radius: 7px; border: 0; background: var(--c); color: var(--anthracite); font-weight: 600; cursor: pointer; }
 .ctime { border: 0; background: none; color: var(--champagne); cursor: pointer; font-variant-numeric: tabular-nums; text-align: left; padding: 0; }
 .crow .btn.icon.sm { width: 30px; padding: 0; }
+
+/* Smartlist-Gruppen, Tempowechsel, Tastenkürzel */
+.rgroup { border: 1px solid var(--line2); border-radius: 12px; padding: 10px 10px 2px; margin-bottom: 8px; } .rgroup > .row { margin-bottom: 8px; } .rgroup > .row select { width: auto; flex: 1; }
+.trow { display: grid; grid-template-columns: 92px 96px 40px 30px; gap: 6px; align-items: center; margin-top: 6px; }
+.krow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); } .krow .btn { min-width: 110px; }
+#keysReset { align-self: flex-start; }

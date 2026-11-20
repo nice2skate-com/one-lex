@@ -90,6 +90,7 @@ const Formats = (() => {
       const loc = 'file://localhost' + (p.startsWith('/') ? '' : '/') + p.split('/').map(encodeURIComponent).join('/').replace(/%3A/g, ':');
       out.push(`    <TRACK TrackID="${i + 1}" Name="${attr(t.title)}" Artist="${attr(t.artist)}" Album="${attr(t.album)}" Genre="${attr(t.genre)}" Kind="${KIND[ext(t.path)] || 'MP3 File'}" Size="${t.size || 0}" TotalTime="${Math.round(t.duration || 0)}" Year="${t.year || 0}" AverageBpm="${(t.bpm || 0).toFixed(2)}" DateAdded="${day(t.added)}" Comments="${attr(t.comment)}" PlayCount="${t.playCount || 0}" Rating="${(t.rating || 0) * 51}" Location="${attr(loc)}" Tonality="${attr(Keys.musical(t.key))}">`);
       if (t.bpm) out.push(`      <TEMPO Inizio="${(t.gridStart || 0).toFixed(3)}" Bpm="${t.bpm.toFixed(2)}" Metro="4/4" Battito="1"/>`);
+      if (t.bpm) for (const x of t.tempos || []) out.push(`      <TEMPO Inizio="${x.t.toFixed(3)}" Bpm="${x.bpm.toFixed(2)}" Metro="4/4" Battito="1"/>`);
       for (const c of t.cues || []) {
         const rgb = c.n >= 0 && /^#[0-9a-f]{6}$/i.test(c.color || '') ? ` Red="${parseInt(c.color.slice(1, 3), 16)}" Green="${parseInt(c.color.slice(3, 5), 16)}" Blue="${parseInt(c.color.slice(5, 7), 16)}"` : '';
         out.push(`      <POSITION_MARK Name="${attr(c.name)}" Type="${c.len ? 4 : 0}" Start="${c.t.toFixed(3)}"${c.len ? ` End="${(c.t + c.len).toFixed(3)}"` : ''} Num="${c.n}"${rgb}/>`);
@@ -118,6 +119,10 @@ const Formats = (() => {
       const t = { title: a('Name'), artist: a('Artist'), album: a('Album'), genre: a('Genre'), year: +a('Year') || 0, bpm: Math.round((+a('AverageBpm') || 0) * 100) / 100,
         key: Keys.parse(a('Tonality')), duration: +a('TotalTime') || 0, rating: Math.round((+a('Rating') || 0) / 51), comment: a('Comments'), path, size: +a('Size') || 0,
         playCount: +a('PlayCount') || 0, gridStart: tempo ? +tempo.getAttribute('Inizio') || 0 : 0, cues: [] };
+      // Tempowechsel: nur echte Änderungen übernehmen (dynamische Raster bestehen sonst aus Hunderten Einträgen)
+      const temps = [...e.querySelectorAll('TEMPO')].map(x => ({ t: +x.getAttribute('Inizio') || 0, bpm: Math.round((+x.getAttribute('Bpm') || 0) * 100) / 100 })).filter(x => x.bpm > 0);
+      const changes = temps.filter((x, i) => i > 0 && Math.abs(x.bpm - temps[i - 1].bpm) > 0.01);
+      if (changes.length && changes.length <= 64) { t.bpm = temps[0].bpm; t.tempos = changes; }
       for (const c of e.querySelectorAll('POSITION_MARK')) {
         const start = +c.getAttribute('Start') || 0, end = +c.getAttribute('End') || 0, r = c.getAttribute('Red');
         const hex = r === null ? '' : '#' + [r, c.getAttribute('Green'), c.getAttribute('Blue')].map(v => (+v || 0).toString(16).padStart(2, '0')).join('');
@@ -189,7 +194,7 @@ const Formats = (() => {
       const t = { title: e.getAttribute('TITLE') || Tags.fromName(file).title, artist: e.getAttribute('ARTIST') || '', album: g(album, 'TITLE'), genre: g(info, 'GENRE'), comment: g(info, 'COMMENT'),
         year: +(/\d{4}/.exec(g(info, 'RELEASE_DATE')) || [0])[0], bpm: Math.round((+g(tempo, 'BPM') || 0) * 100) / 100,
         key: mkv >= 0 && mkv < 24 ? Keys.fromPc(mkv % 12, mkv >= 12) : Keys.parse(g(info, 'KEY')), duration: +g(info, 'PLAYTIME') || 0, rating: Math.round((+g(info, 'RANKING') || 0) / 51),
-        playCount: +g(info, 'PLAYCOUNT') || 0, path: (/^[A-Za-z]:$/.test(vol) ? vol : '') + dir.replace(/\/:/g, '/') + file, size: 0, gridStart: 0, cues: [] };
+        playCount: +g(info, 'PLAYCOUNT') || 0, path: (/^[A-Za-z]:$/.test(vol) ? vol : '') + dir.replace(/\/:/g, '/') + file, volume: vol, size: 0, gridStart: 0, cues: [] };
       for (const c of e.querySelectorAll('CUE_V2')) {
         const type = c.getAttribute('TYPE'), n = +c.getAttribute('HOTCUE'), start = (+c.getAttribute('START') || 0) / 1000;
         if (type === '4') t.gridStart = start;
@@ -256,6 +261,28 @@ const Formats = (() => {
     }
     out.push('</VirtualDJ_Database>');
     return out.join('\r\n') + '\r\n';
+  }
+
+  /* Vorhandene VirtualDJ-Datenbank ergänzen statt ersetzen: fremde Einträge und Angaben bleiben stehen */
+  function vdjMerge(existing, tracks, abs) {
+    if (!existing || !/<VirtualDJ_Database/.test(existing)) return vdjExport(tracks, abs);
+    const fresh = parseXml(vdjExport(tracks, abs)), doc = parseXml(existing), root = doc.documentElement, byPath = new Map();
+    for (const s of doc.querySelectorAll('Song')) byPath.set((s.getAttribute('FilePath') || '').toLowerCase(), s);
+    for (const n of fresh.querySelectorAll('Song')) {
+      const old = byPath.get(n.getAttribute('FilePath').toLowerCase());
+      if (!old) { root.appendChild(doc.importNode(n, true)); continue; }
+      const nt = n.querySelector('Tags');
+      let ot = old.querySelector('Tags');
+      if (!ot) { ot = doc.createElement('Tags'); old.insertBefore(ot, old.firstChild); }
+      for (const a of nt.attributes) if (a.value !== '' && a.name !== 'Flag') ot.setAttribute(a.name, a.value);
+      const nc = n.querySelector('Comment'), oc = old.querySelector('Comment');
+      if (nc) { if (oc) oc.remove(); old.appendChild(doc.importNode(nc, true)); }
+      const cues = [...n.querySelectorAll('Poi')].filter(p => p.getAttribute('Type') === 'cue');
+      if (!cues.length) continue; // ohne eigene Cues bleiben die in VirtualDJ gesetzten stehen
+      for (const p of [...old.querySelectorAll('Poi')]) if ((p.getAttribute('Type') || 'cue') === 'cue') p.remove();
+      for (const p of cues) old.appendChild(doc.importNode(p, true));
+    }
+    return new XMLSerializer().serializeToString(doc);
   }
 
   function vdjImport(doc) {
@@ -393,5 +420,5 @@ const Formats = (() => {
     return parse(await file.text(), file.name);
   }
 
-  return { rekordboxExport, traktorExport, vdjExport, seratoExport, m3uExport, csvExport, zip, safeName, parse, parseFile };
+  return { rekordboxExport, traktorExport, vdjExport, vdjMerge, seratoExport, m3uExport, csvExport, zip, safeName, parse, parseFile };
 })();
