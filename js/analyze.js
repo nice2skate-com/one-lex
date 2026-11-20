@@ -177,7 +177,13 @@ const Analyze = (() => {
     const buf = await decode(file);
     const x = mono(buf);
     const t = tempo(x, buf.sampleRate);
-    return { duration: buf.duration, wave: peaks(x), bpm: t.bpm, gridStart: t.gridStart, key: key(x, buf.sampleRate) };
+    // Lautheit (RMS in dBFS) und daraus eine grobe Energie-Schätzung von 1 bis 10
+    let sum = 0;
+    for (let i = 0; i < x.length; i++) sum += x[i] * x[i];
+    const loud = Math.round(10 * Math.log10(sum / Math.max(1, x.length) + 1e-12) * 10) / 10;
+    const n = (v, a, b) => Math.max(0, Math.min(1, (v - a) / (b - a)));
+    const energy = Math.round(1 + 9 * (0.7 * n(loud, -26, -8) + 0.3 * n(t.bpm || 120, 90, 150)));
+    return { duration: buf.duration, wave: peaks(x), bpm: t.bpm, gridStart: t.gridStart, key: key(x, buf.sampleRate), loud, energy };
   }
 
   return { run, tempo, key };

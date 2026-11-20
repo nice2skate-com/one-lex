@@ -17,32 +17,51 @@
     plus: '<svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>',
     x: '<svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>'
   };
-  // min: Spalte erscheint erst ab dieser Tabellenbreite (px)
+  // min: Spalte erscheint erst ab dieser Tabellenbreite (px); opt: nur auf Wunsch (Rechtsklick auf die Kopfzeile)
   const ALL_COLS = [
     { f: 'pos', l: '#', w: '44px' }, { f: 'color', l: '', w: '22px' },
     { f: 'title', l: 'Titel', w: 'minmax(150px,2.2fr)' }, { f: 'artist', l: 'Artist', w: 'minmax(110px,1.6fr)' },
     { f: 'album', l: 'Album', w: 'minmax(90px,1.2fr)', min: 1120 }, { f: 'genre', l: 'Genre', w: 'minmax(70px,.9fr)', min: 700 },
     { f: 'bpm', l: 'BPM', w: '62px' }, { f: 'key', l: 'Key', w: '54px' }, { f: 'duration', l: 'Zeit', w: '56px' },
     { f: 'rating', l: 'Bewertung', w: '96px', min: 600 }, { f: 'year', l: 'Jahr', w: '52px', min: 900 },
-    { f: 'tags', l: 'Tags', w: 'minmax(80px,1fr)', min: 800 }, { f: 'added', l: 'Hinzugefügt', w: '96px', min: 1000 }
+    { f: 'tags', l: 'Tags', w: 'minmax(80px,1fr)', min: 800 }, { f: 'added', l: 'Hinzugefügt', w: '96px', min: 1000 },
+    { f: 'energy', l: 'Energie', w: '72px', opt: true }, { f: 'playCount', l: 'Plays', w: '58px', opt: true }, { f: 'lastPlayed', l: 'Gespielt', w: '96px', opt: true },
+    { f: 'comment', l: 'Kommentar', w: 'minmax(100px,1.3fr)', opt: true }, { f: 'format', l: 'Typ', w: '56px', opt: true },
+    { f: 'bitrate', l: 'kbit/s', w: '64px', opt: true }, { f: 'file', l: 'Datei', w: 'minmax(120px,1.5fr)', opt: true }
   ];
-  let COLS = ALL_COLS;
-  function fitCols() {
-    const w = $('#tbody').clientWidth;
-    const next = ALL_COLS.filter(c => !c.min || w >= c.min);
-    const changed = next.length !== COLS.length || !document.documentElement.style.getPropertyValue('--cols');
+  const FIXED_COL = f => f === 'pos' || f === 'color';
+  let COLS = ALL_COLS.filter(c => !c.opt);
+  function fitCols(force) {
+    const w = $('#tbody').clientWidth, cs = S.settings.cols;
+    const rank = f => f === 'pos' ? -2 : f === 'color' ? -1 : cs.order.includes(f) ? cs.order.indexOf(f) : 1000 + ALL_COLS.findIndex(c => c.f === f);
+    const next = ALL_COLS.filter(c => FIXED_COL(c.f) || c.f === 'title' ? true : cs.hidden.includes(c.f) ? false : cs.shown.includes(c.f) ? true : !c.opt && (!c.min || w >= c.min))
+      .sort((a, b) => rank(a.f) - rank(b.f));
+    const sig = next.map(c => c.f + (cs.w[c.f] || '')).join();
+    if (sig === fitCols.sig && !force) return;
+    fitCols.sig = sig;
     COLS = next;
-    if (changed) { document.documentElement.style.setProperty('--cols', COLS.map(c => c.w).join(' ')); renderHead(); }
+    document.documentElement.style.setProperty('--cols', COLS.map(c => cs.w[c.f] ? cs.w[c.f] + 'px' : c.w).join(' '));
+    renderHead();
   }
-  const RULE_FIELDS = { title: 'Titel', artist: 'Artist', album: 'Album', genre: 'Genre', comment: 'Kommentar', tags: 'Tags', key: 'Tonart', bpm: 'BPM', year: 'Jahr', rating: 'Bewertung', duration: 'Dauer (Sek.)', playCount: 'Wiedergaben', addedDays: 'Hinzugefügt vor (Tagen)' };
-  const RULE_NUM = new Set(['bpm', 'year', 'rating', 'duration', 'playCount', 'addedDays']);
+  function colMenu(e) {
+    const cs = S.settings.cols, vis = new Set(COLS.map(c => c.f));
+    const apply = () => { saveSettings(); fitCols(true); drawRows(); };
+    menu(e.clientX, e.clientY, [{ head: 'Spalten' }, ...ALL_COLS.filter(c => !FIXED_COL(c.f) && c.f !== 'title').map(c => ({ l: (vis.has(c.f) ? '✓  ' : '     ') + c.l, fn: () => {
+      const on = vis.has(c.f);
+      cs.hidden = cs.hidden.filter(x => x !== c.f); cs.shown = cs.shown.filter(x => x !== c.f);
+      (on ? cs.hidden : cs.shown).push(c.f);
+      apply();
+    } })), null, { l: 'Standard wiederherstellen', fn: () => { S.settings.cols = { hidden: [], shown: [], order: [], w: {} }; apply(); } }]);
+  }
+  const RULE_FIELDS = { title: 'Titel', artist: 'Artist', album: 'Album', genre: 'Genre', comment: 'Kommentar', tags: 'Tags', key: 'Tonart', bpm: 'BPM', year: 'Jahr', rating: 'Bewertung', duration: 'Dauer (Sek.)', playCount: 'Wiedergaben', energy: 'Energie', addedDays: 'Hinzugefügt vor (Tagen)' };
+  const RULE_NUM = new Set(['bpm', 'year', 'rating', 'duration', 'playCount', 'energy', 'addedDays']);
   const RULE_OPS = { has: 'enthält', hasnt: 'enthält nicht', is: 'ist', isnt: 'ist nicht', gt: 'größer als', lt: 'kleiner als' };
 
   const S = {
     tracks: new Map(), lists: [], roots: [], files: new Map(),
     view: { type: 'all' }, sel: new Set(), anchor: null, sort: { f: 'added', d: -1 }, q: '', rows: [],
-    settings: { keyMode: 'camelot', basePath: '', quantize: true, volume: 0.9 },
-    cur: null, curWave: null, busy: null, dupes: null
+    settings: { keyMode: 'camelot', basePath: '', quantize: true, volume: 0.9, theme: 'dark', normalize: false, cols: { hidden: [], shown: [], order: [], w: {} }, sorts: {} },
+    cur: null, curWave: null, busy: null, dupes: null, loop: null, click: false, panel: false
   };
   const audio = new Audio();
   let audioUrl = null;
@@ -71,6 +90,36 @@
   const absPath = t => /^(\/|[A-Za-z]:[\\/])/.test(t.path) ? t.path : (S.settings.basePath || '').replace(/[\\/]*$/, '/') + t.path;
   const selected = () => S.rows.filter(t => S.sel.has(t.id));
   const fileName = t => (t.path || '').replace(/\\/g, '/').split('/').pop();
+  const extOf = t => (/\.([a-z0-9]+)$/i.exec(t.path || '') || [0, ''])[1].toUpperCase();
+  const bitrate = t => t.size && t.duration ? Math.round(t.size * 8 / t.duration / 1000) : 0;
+  const sortVal = (t, f) => f === 'key' ? Keys.sortVal(t.key) : f === 'tags' ? (t.tags || []).join(',').toLowerCase() : f === 'format' ? extOf(t) : f === 'bitrate' ? bitrate(t) : f === 'file' ? fileName(t) : t[f];
+  const cmpVal = (a, b, f) => {
+    const x = sortVal(a, f), y = sortVal(b, f);
+    if (typeof x === 'string' || typeof y === 'string') return String(x || '').localeCompare(String(y || ''), 'de', { sensitivity: 'base', numeric: true });
+    return (x || 0) - (y || 0);
+  };
+  const viewKey = v => v.type + ':' + (v.id || '');
+  const applyTheme = () => { document.body.dataset.theme = S.settings.theme || 'dark'; };
+
+  /* Rückgängig: vor jeder Änderung den Stand der betroffenen Titel und aller Listen merken */
+  const undoStack = [];
+  function snap(label, tracks = []) {
+    undoStack.push({ label, tracks: structuredClone(tracks), lists: structuredClone(S.lists) });
+    if (undoStack.length > 40) undoStack.shift();
+  }
+  async function undo() {
+    const u = undoStack.pop();
+    if (!u) return toast('Nichts zum Rückgängigmachen.');
+    for (const t of u.tracks) S.tracks.set(t.id, t);
+    await saveTracks(u.tracks);
+    S.lists = u.lists;
+    await DB.clear('lists'); await DB.putMany('lists', S.lists);
+    S.loop = null;
+    if (S.cur) S.cur = S.tracks.get(S.cur.id) || null;
+    if (S.view.type === 'list' && !S.lists.some(l => l.id === S.view.id)) S.view = { type: 'all' };
+    dirty(); renderDeck();
+    toast('Rückgängig: ' + u.label);
+  }
 
   function modal({ title, body, ok = 'Speichern', wide, onOpen }) {
     return new Promise(res => {
@@ -105,11 +154,22 @@
   function closeMenu() { const m = $('.menu'); if (m) m.remove(); }
 
   /* ---------- Dateizugriff ---------- */
-  async function perm(h, ask) {
+  async function perm(h, ask, mode = 'read') {
     if (!h.queryPermission) return true;
-    let p = await h.queryPermission({ mode: 'read' });
-    if (p !== 'granted' && ask) p = await h.requestPermission({ mode: 'read' });
+    let p = await h.queryPermission({ mode });
+    if (p !== 'granted' && ask) p = await h.requestPermission({ mode });
     return p === 'granted';
+  }
+  /* Schreibbarer Zugriff auf die Originaldatei (nur Chrome/Edge, nur über gewählte Ordner oder Dateien) */
+  async function writableOf(t, ask) {
+    const f = S.files.get(t.id);
+    if (f && f.createWritable) return (await perm(f, ask, 'readwrite')) ? f : null;
+    const root = t.root && S.roots.find(r => r.id === t.root);
+    if (!root || !root.handle.getFileHandle || !(await perm(root.handle, ask, 'readwrite'))) return null;
+    const parts = t.rel.split('/');
+    let dir = root.handle;
+    for (let i = 0; i < parts.length - 1; i++) dir = await dir.getDirectoryHandle(parts[i]);
+    return dir.getFileHandle(parts[parts.length - 1]);
   }
   async function fileOf(t, ask) {
     const f = S.files.get(t.id);
@@ -183,6 +243,7 @@
           path: it.path, size: file.size, added: Date.now(), playCount: 0, analyzed: false };
         S.tracks.set(t.id, t);
         bySize.set(n + '|' + file.size, t);
+        await storeCover(t, tag.picture);
         added++;
       }
       if (it.root) { t.root = it.root; t.rel = it.rel; if (!/^(\/|[A-Za-z]:)/.test(t.path)) t.path = it.path; }
@@ -204,6 +265,31 @@
     toast(`${nf(added)} Titel hinzugefügt` + (linked ? `, ${nf(linked)} neu verbunden` : '') + '.');
   }
 
+  async function storeCover(t, pic) {
+    if (!pic) return;
+    try {
+      const bmp = await createImageBitmap(new Blob([pic.data], { type: pic.mime }));
+      const k = Math.min(1, 240 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.82));
+      if (blob) { await DB.put('covers', blob, t.id); t.cover = true; }
+    } catch { /* Bild nicht lesbar: ohne Cover weiter */ }
+  }
+  const coverUrls = new Map();
+  async function fillCovers(root) {
+    for (const img of $$('[data-cover]', root)) {
+      const id = img.dataset.cover;
+      if (!coverUrls.has(id)) {
+        const b = await DB.get('covers', id);
+        if (!b) continue;
+        coverUrls.set(id, URL.createObjectURL(b));
+        if (coverUrls.size > 60) { const [k, u] = coverUrls.entries().next().value; URL.revokeObjectURL(u); coverUrls.delete(k); }
+      }
+      img.src = coverUrls.get(id);
+    }
+  }
+
   /* ---------- Analyse ---------- */
   async function analyze(tracks) {
     tracks = tracks.filter(connected);
@@ -221,6 +307,9 @@
         if (r.bpm) { t.bpm = r.bpm; t.gridStart = r.gridStart; }
         if (r.key) t.key = Keys.fromPc(r.key.pc, r.key.minor);
         if (r.duration) t.duration = r.duration;
+        t.loud = r.loud;
+        if (!t.energy) t.energy = r.energy;
+        if (!t.cover) await storeCover(t, (await Tags.read(f)).picture);
         t.analyzed = true; delete t.missing;
         await DB.put('waves', r.wave, t.id);
         await DB.put('tracks', t);
@@ -298,10 +387,11 @@
     }
   }
   const smartTracks = l => {
-    const cs = (l.rules && l.rules.conds) || [];
-    const all = [...S.tracks.values()];
-    if (!cs.length) return all;
-    return all.filter(t => l.rules.match === 'any' ? cs.some(c => ruleMatch(t, c)) : cs.every(c => ruleMatch(t, c)));
+    const r = l.rules || {}, cs = r.conds || [];
+    let out = [...S.tracks.values()];
+    if (cs.length) out = out.filter(t => r.match === 'any' ? cs.some(c => ruleMatch(t, c)) : cs.every(c => ruleMatch(t, c)));
+    if (r.limit > 0) { out.sort((a, b) => cmpVal(a, b, r.sortBy || 'added') * (r.sortDir || -1)); out = out.slice(0, r.limit); }
+    return out;
   };
 
   function viewTracks(v) {
@@ -309,6 +399,7 @@
     switch (v.type) {
       case 'recent': { const lim = Date.now() - 30 * 864e5; return all.filter(t => t.added >= lim); }
       case 'unanalyzed': return all.filter(t => !t.analyzed);
+      case 'played': return all.filter(t => t.lastPlayed);
       case 'dupes': { const d = dupes(); return all.filter(t => d.has(t.id)); }
       case 'missing': return all.filter(isMissing);
       case 'tag': return all.filter(t => (t.tags || []).includes(v.id));
@@ -335,12 +426,7 @@
     });
     const { f, d } = S.sort;
     if (f !== 'pos') {
-      const val = f === 'key' ? t => Keys.sortVal(t.key) : f === 'tags' ? t => (t.tags || []).join(',').toLowerCase() : t => t[f];
-      const cmp = (a, b) => {
-        const x = val(a), y = val(b);
-        if (typeof x === 'string' || typeof y === 'string') return String(x || '').localeCompare(String(y || ''), 'de', { sensitivity: 'base', numeric: true });
-        return (x || 0) - (y || 0);
-      };
+      const cmp = (a, b) => cmpVal(a, b, f);
       if (S.view.type === 'dupes') { const dm = dupes(); rows.sort((a, b) => dm.get(a.id).localeCompare(dm.get(b.id)) || cmp(a, b) * d); }
       else rows.sort((a, b) => cmp(a, b) * d);
     }
@@ -351,7 +437,8 @@
   function setView(v) {
     S.view = v;
     const plain = v.type === 'list' && (S.lists.find(l => l.id === v.id) || {}).type === 'list';
-    S.sort = plain ? { f: 'pos', d: 1 } : S.sort.f === 'pos' ? { f: 'added', d: -1 } : S.sort;
+    S.sort = S.settings.sorts[viewKey(v)] || (plain ? { f: 'pos', d: 1 } : v.type === 'played' ? { f: 'lastPlayed', d: -1 } : { f: 'added', d: -1 });
+    if (S.sort.f === 'pos' && !plain) S.sort = { f: 'added', d: -1 };
     S.sel.clear(); S.anchor = null;
     refresh();
     $('#tbody').scrollTop = 0;
@@ -408,13 +495,25 @@
       item('all', '', 'Alle Titel', all.length) +
       item('recent', '', 'Neu (30 Tage)', all.filter(t => t.added >= lim).length) +
       item('unanalyzed', '', 'Nicht analysiert', all.filter(t => !t.analyzed).length) +
+      item('played', '', 'Zuletzt gespielt', all.filter(t => t.lastPlayed).length) +
       item('dupes', '', 'Duplikate', dupes().size) +
       item('missing', '', 'Fehlende Dateien', all.filter(isMissing).length);
     if (S.view.type === 'match') h += item('match', S.view.id, 'Passend zum Deck', S.view.type === 'match' ? viewTracks(S.view).length : undefined);
     h += `<div class="sh">Playlists<button class="add" data-new="list" title="Neue Playlist">${IC.plus}</button></div>`;
-    h += S.lists.filter(l => l.type === 'list').map(l => item('list', l.id, l.name, l.trackIds.length, ' data-drop="1"')).join('') || '<div class="hint">Titel hierher ziehen, sobald eine Playlist angelegt ist.</div>';
+    // Namen mit „ / “ werden als Ordner dargestellt
+    const listItems = type => {
+      let open = [], out = '';
+      for (const l of S.lists.filter(x => x.type === type).sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }))) {
+        const parts = l.name.split(' / '), leaf = parts.pop();
+        parts.forEach((p, i) => { if (open[i] !== p) { open = open.slice(0, i); open[i] = p; out += `<div class="fold" style="--d:${i}">${esc(p)}</div>`; } });
+        open = open.slice(0, parts.length);
+        out += item('list', l.id, leaf, type === 'smart' ? smartTracks(l).length : l.trackIds.length, ` style="--d:${parts.length}"` + (type === 'list' ? ' data-drop="1"' : ''));
+      }
+      return out;
+    };
+    h += listItems('list') || '<div class="hint">Titel hierher ziehen, sobald eine Playlist angelegt ist.</div>';
     h += `<div class="sh">Smartlists<button class="add" data-new="smart" title="Neue Smartlist">${IC.plus}</button></div>`;
-    h += S.lists.filter(l => l.type === 'smart').map(l => item('list', l.id, l.name, smartTracks(l).length)).join('') || '<div class="hint">Listen, die sich über Regeln selbst füllen.</div>';
+    h += listItems('smart') || '<div class="hint">Listen, die sich über Regeln selbst füllen.</div>';
     h += '<div class="sh">Tags</div>';
     h += [...tagCount].sort((a, b) => a[0].localeCompare(b[0], 'de')).map(([g, n]) => item('tag', g, g, n, ' data-drop="1"')).join('') || '<div class="hint">Tags im Bereich rechts vergeben.</div>';
     $('#side').innerHTML = h;
@@ -422,7 +521,7 @@
 
   function renderHead() {
     const plain = S.sort.f === 'pos';
-    $('#thead').innerHTML = COLS.map(c => `<div class="th${S.sort.f === c.f ? ' on' : ''}" data-f="${c.f}">${c.f === 'pos' && !plain ? '' : esc(c.l)}${S.sort.f === c.f && c.f !== 'pos' ? (S.sort.d > 0 ? ' ▲' : ' ▼') : ''}</div>`).join('');
+    $('#thead').innerHTML = COLS.map(c => `<div class="th${S.sort.f === c.f ? ' on' : ''}" data-f="${c.f}"${FIXED_COL(c.f) ? '' : ' draggable="true"'}>${c.f === 'pos' && !plain ? '' : esc(c.l)}${S.sort.f === c.f && c.f !== 'pos' ? (S.sort.d > 0 ? ' ▲' : ' ▼') : ''}${FIXED_COL(c.f) ? '' : '<i class="rz"></i>'}</div>`).join('');
   }
 
   function cell(t, c, i) {
@@ -437,6 +536,12 @@
       case 'year': return t.year || '';
       case 'tags': return (t.tags || []).map(g => `<span class="tag">${esc(g)}</span>`).join('');
       case 'added': return date(t.added);
+      case 'energy': return t.energy ? `<span class="en" style="--e:${t.energy * 10}%">${t.energy}</span>` : '';
+      case 'playCount': return t.playCount || '';
+      case 'lastPlayed': return date(t.lastPlayed);
+      case 'format': return esc(extOf(t));
+      case 'bitrate': return bitrate(t) || '';
+      case 'file': return esc(fileName(t));
       default: return esc(t[c.f]);
     }
   }
@@ -468,13 +573,16 @@
     const rating = common('rating'), color = common('color');
     const tags = [...new Set(sel.flatMap(x => x.tags || []))].sort((a, b) => a.localeCompare(b, 'de'));
     el.innerHTML = `<div class="sh">${multi ? nf(sel.length) + ' Titel bearbeiten' : 'Details'}</div>
+      ${!multi && t.cover ? `<img class="cover big" data-cover="${t.id}" alt="">` : ''}
       ${field('title', 'Titel')}${field('artist', 'Artist')}${field('album', 'Album')}${field('genre', 'Genre')}
       <div class="grid3">${field('bpm', 'BPM', 'number')}${field('key', 'Tonart')}${field('year', 'Jahr', 'number')}</div>
+      <div class="grid3">${field('energy', 'Energie', 'number')}</div>
       <div class="field"><span class="lbl">Bewertung</span><div class="rate">${[1, 2, 3, 4, 5].map(n => `<button data-rate="${n}" class="${rating >= n ? 'on' : ''}">★</button>`).join('')}</div></div>
       <div class="field"><span class="lbl">Farbe</span><div class="swatches">${COLORS.map(c => `<button data-color="${c}" class="${color === c ? 'on' : ''}" style="--c:${c || 'transparent'}" title="${c ? '' : 'Keine'}"></button>`).join('')}</div></div>
       <div class="field"><span class="lbl">Tags</span><div class="tagbox">${tags.map(g => `<span class="tag">${esc(g)}<button data-untag="${esc(g)}" aria-label="Tag entfernen">×</button></span>`).join('')}<input id="tagIn" placeholder="Tag hinzufügen + Enter" list="tagList"><datalist id="tagList">${[...new Set([...S.tracks.values()].flatMap(x => x.tags || []))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></div></div>
       <label class="field"><span class="lbl">Kommentar</span><textarea class="in" data-f="comment" rows="3" placeholder="${common('comment') === null ? '(verschiedene)' : ''}">${esc(common('comment') || '')}</textarea></label>
       ${multi ? '' : `<div class="meta"><div><span class="lbl">Datei</span><code>${esc(t.path)}</code></div><div><span class="lbl">Status</span>${isMissing(t) ? '<span class="warn">Datei nicht verbunden</span>' : 'Verbunden'} · ${t.analyzed ? 'analysiert' : 'nicht analysiert'} · ${nf(t.playCount || 0)}× gespielt</div></div>`}`;
+    fillCovers(el);
   }
 
   /* ---------- Bearbeiten ---------- */
@@ -484,8 +592,10 @@
     let v = raw;
     if (f === 'bpm') v = Math.round((parseFloat(String(raw).replace(',', '.')) || 0) * 100) / 100;
     else if (f === 'year' || f === 'rating') v = parseInt(raw, 10) || 0;
+    else if (f === 'energy') v = Math.max(0, Math.min(10, parseInt(raw, 10) || 0));
     else if (f === 'key') { v = Keys.parse(raw); if (raw.trim() && !v) return toast('Tonart nicht erkannt. Beispiele: 8A, Am, F#m, C.', true); }
     else if (typeof v === 'string') v = v.trim();
+    snap('Bearbeiten', sel);
     for (const t of sel) t[f] = v;
     await saveTracks(sel);
     dirty();
@@ -494,6 +604,7 @@
   async function tagSel(name, addIt, tracks = selected()) {
     name = name.trim();
     if (!name || !tracks.length) return;
+    snap('Tags', tracks);
     for (const t of tracks) {
       const set = new Set(t.tags || []);
       addIt ? set.add(name) : set.delete(name);
@@ -508,15 +619,17 @@
     if (!sel.length) return;
     const list = S.view.type === 'list' && S.lists.find(l => l.id === S.view.id && l.type === 'list');
     if (list) {
+      snap('Aus Playlist entfernen');
       const ids = new Set(sel.map(t => t.id));
       list.trackIds = list.trackIds.filter(id => !ids.has(id));
       await saveList(list);
     } else {
       if (!(await confirmBox('Aus Bibliothek entfernen', `${nf(sel.length)} Titel aus der Bibliothek entfernen? Die Audiodateien selbst bleiben unangetastet.`, 'Entfernen'))) return;
+      snap('Aus Bibliothek entfernen', sel);
       const ids = sel.map(t => t.id), set = new Set(ids);
-      for (const id of ids) { S.tracks.delete(id); S.files.delete(id); }
+      for (const id of ids) S.tracks.delete(id);
       for (const l of S.lists) if (l.trackIds && l.trackIds.some(id => set.has(id))) { l.trackIds = l.trackIds.filter(id => !set.has(id)); await saveList(l); }
-      await DB.delMany('tracks', ids); await DB.delMany('waves', ids); await DB.delMany('handles', ids);
+      await DB.delMany('tracks', ids); // Wellenform, Cover und Dateiverbindung bleiben bis zum nächsten Start (für Rückgängig)
       if (S.cur && set.has(S.cur.id)) unload();
     }
     S.sel.clear();
@@ -526,14 +639,16 @@
   async function addToList(list, tracks) {
     const have = new Set(list.trackIds);
     const fresh = tracks.filter(t => !have.has(t.id));
+    if (fresh.length) snap('Zu Playlist hinzufügen');
     list.trackIds.push(...fresh.map(t => t.id));
     await saveList(list);
     dirty();
     toast(fresh.length ? `${nf(fresh.length)} Titel zu „${list.name}“ hinzugefügt.` : 'Die Titel sind bereits in dieser Playlist.');
   }
   async function newList(tracks) {
-    const f = await modal({ title: 'Neue Playlist', body: '<label class="field"><span class="lbl">Name</span><input class="in" name="name" required></label>', ok: 'Anlegen' });
+    const f = await modal({ title: 'Neue Playlist', body: '<label class="field"><span class="lbl">Name</span><input class="in" name="name" required><small>Mit „Ordner / Name“ landet die Playlist in einem Ordner.</small></label>', ok: 'Anlegen' });
     if (!f) return;
+    snap('Neue Playlist');
     const l = { id: uid(), type: 'list', name: f.name.value.trim() || 'Playlist', trackIds: (tracks || []).map(t => t.id) };
     S.lists.push(l);
     await saveList(l);
@@ -547,15 +662,19 @@
       title: list ? 'Smartlist bearbeiten' : 'Neue Smartlist', wide: true,
       body: `<label class="field"><span class="lbl">Name</span><input class="in" name="name" required value="${esc(l.name)}"></label>
         <label class="field"><span class="lbl">Titel aufnehmen, wenn</span><select class="in" name="match"><option value="all"${l.rules.match === 'all' ? ' selected' : ''}>alle Regeln zutreffen</option><option value="any"${l.rules.match === 'any' ? ' selected' : ''}>mindestens eine Regel zutrifft</option></select></label>
-        <div id="rules">${l.rules.conds.map(row).join('')}</div><button type="button" class="btn" id="addRule">${IC.plus} Regel</button>`,
+        <div id="rules">${l.rules.conds.map(row).join('')}</div><button type="button" class="btn" id="addRule">${IC.plus} Regel</button>
+        <div class="grid3"><label class="field"><span class="lbl">Höchstens (Titel)</span><input class="in" name="limit" type="number" min="0" value="${l.rules.limit || ''}" placeholder="unbegrenzt"></label>
+          <label class="field"><span class="lbl">Auswahl nach</span><select class="in" name="sortBy">${[['added', 'Hinzugefügt'], ['lastPlayed', 'Zuletzt gespielt'], ['playCount', 'Wiedergaben'], ['rating', 'Bewertung'], ['bpm', 'BPM'], ['energy', 'Energie'], ['year', 'Jahr']].map(([k, v]) => `<option value="${k}"${l.rules.sortBy === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+          <label class="field"><span class="lbl">Richtung</span><select class="in" name="sortDir"><option value="-1">höchste / neueste zuerst</option><option value="1"${l.rules.sortDir === 1 ? ' selected' : ''}>niedrigste / älteste zuerst</option></select></label></div>`,
       onOpen: ov => ov.addEventListener('click', e => {
         if (e.target.closest('#addRule')) $('#rules', ov).insertAdjacentHTML('beforeend', row({ field: 'bpm', op: 'gt', value: '' }));
         const d = e.target.closest('[data-delrule]'); if (d) d.parentElement.remove();
       })
     });
     if (!f) return;
+    snap('Smartlist');
     l.name = f.name.value.trim() || 'Smartlist';
-    l.rules = { match: f.match.value, conds: $$('.rule', f).map(r => ({ field: $('[data-k=field]', r).value, op: $('[data-k=op]', r).value, value: $('[data-k=value]', r).value.trim() })).filter(c => c.value !== '') };
+    l.rules = { match: f.match.value, limit: parseInt(f.limit.value, 10) || 0, sortBy: f.sortBy.value, sortDir: +f.sortDir.value, conds: $$('.rule', f).map(r => ({ field: $('[data-k=field]', r).value, op: $('[data-k=op]', r).value, value: $('[data-k=value]', r).value.trim() })).filter(c => c.value !== '') };
     if (!list) S.lists.push(l);
     await saveList(l);
     setView({ type: 'list', id: l.id });
@@ -570,6 +689,7 @@
     if (!f) return;
     const a = f.a.value, b = f.b.value, k = f.field.value;
     let n = 0;
+    snap('Suchen & Ersetzen', sel);
     for (const t of sel) { const v = String(t[k] || ''); const w = v.split(a).join(b).trim(); if (w !== v) { t[k] = w; n++; } }
     await saveTracks(sel);
     dirty();
@@ -578,23 +698,132 @@
   async function fromFileName() {
     const sel = selected();
     if (!sel.length) return toast('Zuerst Titel auswählen.', true);
+    snap('Aus Dateiname benennen', sel);
     for (const t of sel) { const p = Tags.fromName(fileName(t)); t.title = p.title; if (p.artist) t.artist = p.artist; }
     await saveTracks(sel);
     dirty();
     toast(`${nf(sel.length)} Titel aus dem Dateinamen benannt.`);
   }
 
+  /* ---------- Werkzeuge ---------- */
+  async function batch(kind) {
+    const sel = selected();
+    if (!sel.length) return toast('Zuerst Titel auswählen.', true);
+    const word = w => /^(feat\.?|ft\.?|vs\.?|pres\.?)$/i.test(w) ? w.toLowerCase() : /[A-ZÄÖÜ]/.test(w.slice(1)) && /[a-zäöüß]/.test(w) ? w : w.length <= 3 && w === w.toUpperCase() && /[A-ZÄÖÜ]{2}/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    snap({ caps: 'Groß-/Kleinschreibung', swap: 'Artist und Titel tauschen', trim: 'Leerzeichen bereinigen' }[kind], sel);
+    for (const t of sel) {
+      if (kind === 'swap') [t.title, t.artist] = [t.artist, t.title];
+      else for (const f of ['title', 'artist', 'album', 'genre']) {
+        const v = String(t[f] || '');
+        t[f] = kind === 'caps' ? v.replace(/[^\s\-(\[\/&,]+/g, word) : v.replace(/\s+/g, ' ').trim();
+      }
+    }
+    await saveTracks(sel);
+    dirty();
+    toast(`${nf(sel.length)} Titel bearbeitet. Mit Strg/⌘+Z rückgängig.`);
+  }
+
+  /* Duplikate: gleicher Artist + Titel und gleiche Länge (±3 s). Der beste Eintrag bleibt, Angaben und Playlists werden übernommen. */
+  async function mergeDupes() {
+    const groups = new Map();
+    for (const [id, k] of dupes()) (groups.get(k) || groups.set(k, []).get(k)).push(S.tracks.get(id));
+    const score = t => (connected(t) && !t.missing ? 8 : 0) + (t.analyzed ? 4 : 0) + ((t.cues || []).length ? 2 : 0) + Math.min(1, (t.size || 0) / 1e9);
+    const plan = [];
+    for (const g of groups.values()) {
+      g.sort((a, b) => score(b) - score(a));
+      const keep = g[0], gone = g.slice(1).filter(t => !keep.duration || !t.duration || Math.abs(keep.duration - t.duration) <= 3);
+      if (gone.length) plan.push({ keep, gone });
+    }
+    const n = plan.reduce((a, p) => a + p.gone.length, 0);
+    if (!n) return toast('Keine Duplikate mit gleicher Länge gefunden.');
+    if (!(await confirmBox('Duplikate zusammenführen', `${n === 1 ? '1 doppelter Eintrag wird' : nf(n) + ' doppelte Einträge werden'} entfernt, ${nf(plan.length)} ${plan.length === 1 ? 'bleibt' : 'bleiben'}. Bewertung, Tags, Cues und Playlist-Zugehörigkeit gehen auf den verbleibenden Eintrag über. Die Audiodateien bleiben unangetastet.`, 'Zusammenführen'))) return;
+    snap('Duplikate zusammenführen', plan.flatMap(p => [p.keep, ...p.gone]));
+    const map = new Map(), kept = [];
+    for (const { keep, gone } of plan) {
+      for (const t of gone) {
+        keep.tags = [...new Set([...(keep.tags || []), ...(t.tags || [])])];
+        keep.rating = Math.max(keep.rating || 0, t.rating || 0);
+        keep.playCount = (keep.playCount || 0) + (t.playCount || 0);
+        for (const f of ['album', 'genre', 'comment', 'key', 'color', 'year', 'bpm', 'energy']) if (!keep[f] && t[f]) keep[f] = t[f];
+        if (!(keep.cues || []).length && (t.cues || []).length) keep.cues = t.cues;
+        map.set(t.id, keep.id);
+        S.tracks.delete(t.id);
+        if (S.cur === t) unload();
+      }
+      kept.push(keep);
+    }
+    await saveTracks(kept);
+    await DB.delMany('tracks', [...map.keys()]);
+    for (const l of S.lists) if (l.trackIds && l.trackIds.some(id => map.has(id))) { l.trackIds = [...new Set(l.trackIds.map(id => map.get(id) || id))]; await saveList(l); }
+    S.sel.clear();
+    dirty();
+    toast(n === 1 ? '1 Duplikat zusammengeführt.' : `${nf(n)} Duplikate zusammengeführt.`);
+  }
+
+  async function writeTags() {
+    const sel = selected();
+    if (!sel.length) return toast('Zuerst Titel auswählen.', true);
+    const ok = sel.filter(t => TagWrite.supported(fileName(t)));
+    if (!ok.length) return toast('Schreiben geht bei MP3 und FLAC – in der Auswahl ist keine solche Datei.', true);
+    if (S.busy) return toast('Bitte warten, es läuft noch ein Vorgang.', true);
+    if (!(await modal({ title: 'Tags in Dateien schreiben', ok: 'Schreiben', body: `<p>Titel, Artist, Album, Genre, Jahr, BPM, Tonart und Kommentar werden in <b>${nf(ok.length)}</b> Audiodatei${ok.length === 1 ? '' : 'en'} geschrieben${ok.length < sel.length ? ` (${nf(sel.length - ok.length)} andere Dateitypen werden übersprungen)` : ''}.</p><p class="mut">Die Originaldateien werden dabei geändert; Cover und fremde Angaben bleiben erhalten. Das lässt sich nicht rückgängig machen. Der Browser fragt gleich nach Schreibzugriff auf den Musikordner.</p>` }))) return;
+    const job = S.busy = { stop: false }, fails = new Map();
+    let done = 0;
+    for (let i = 0; i < ok.length && !job.stop; i++) {
+      const t = ok[i];
+      status(`Tags schreiben ${i + 1} / ${ok.length}: ${t.title}`, i / ok.length);
+      try {
+        const h = await writableOf(t, true);
+        if (!h) throw new Error('kein Schreibzugriff (Ordner über „Musik hinzufügen“ in Chrome oder Edge wählen)');
+        const data = await TagWrite.build(await h.getFile(), t);
+        const w = await h.createWritable();
+        await w.write(data);
+        await w.close();
+        t.size = data.length; delete t.missing;
+        await DB.put('tracks', t);
+        done++;
+      } catch (e) { const m = e.message || 'unbekannter Fehler'; fails.set(m, (fails.get(m) || 0) + 1); }
+    }
+    S.busy = null;
+    status();
+    dirty();
+    toast(`${nf(done)} Datei${done === 1 ? '' : 'en'} geschrieben.` + (fails.size ? ' Nicht geschrieben: ' + [...fails].map(([m, n]) => `${nf(n)}× ${m}`).join('; ') + '.' : ''), fails.size > 0);
+  }
+
   /* ---------- Deck ---------- */
+  const time2 = s => { const m = Math.floor(s / 60); return m + ':' + (s - m * 60).toFixed(1).padStart(4, '0'); };
+  const cueColor = c => c.color || (c.n >= 0 ? CUE_COLORS[c.n] : '#B9B5AD');
+  const normFactor = t => S.settings.normalize && t && typeof t.loud === 'number' ? Math.max(0.2, Math.min(1, Math.pow(10, (-14 - t.loud) / 20))) : 1;
+  const applyVol = () => { audio.volume = Math.max(0, Math.min(1, S.settings.volume * normFactor(S.cur))); };
+
+  function panelHtml(t) {
+    const beat = t.bpm ? 60 / t.bpm : 0;
+    const row = (c, i) => `<div class="crow" data-i="${i}"><button type="button" class="cbadge" data-ccolor style="--c:${cueColor(c)}" title="Farbe wechseln">${c.n >= 0 ? c.n + 1 : 'M'}</button><button type="button" class="ctime" data-cgo title="Anspringen">${time2(c.t)}</button><input class="in" data-cname value="${esc(c.name)}" placeholder="Name" aria-label="Cue-Name"><select class="in" data-clen ${beat ? '' : 'disabled'} aria-label="Loop-Länge">${[0, 4, 8, 16, 32].map(b => `<option value="${b}"${beat && Math.round((c.len || 0) / beat) === b ? ' selected' : ''}>${b ? b + ' Beats' : 'kein Loop'}</option>`).join('')}</select><button type="button" class="btn ghost icon sm" data-cdel aria-label="Cue löschen">${IC.x}</button></div>`;
+    return `<div class="dpanel scroll" id="dpanel">
+      <div class="sh">Beatraster</div>
+      <div class="gridrow"><label class="field"><span class="lbl">BPM</span><input class="in" id="gBpm" type="number" step="any" value="${t.bpm || ''}"></label>
+        <button type="button" class="btn sm" data-grid="half">÷ 2</button><button type="button" class="btn sm" data-grid="double">× 2</button>
+        <button type="button" class="btn sm" data-grid="-10" title="Raster 10 ms früher">◀◀</button><button type="button" class="btn sm" data-grid="-1" title="Raster 1 ms früher">◀</button>
+        <button type="button" class="btn sm" data-grid="1" title="Raster 1 ms später">▶</button><button type="button" class="btn sm" data-grid="10" title="Raster 10 ms später">▶▶</button>
+        <button type="button" class="btn sm" data-grid="here" title="Beat an die aktuelle Position legen">Beat hier</button>
+        <button type="button" class="btn sm${S.click ? ' active' : ''}" data-grid="click" title="Klick auf jeden Beat zum Prüfen des Rasters">Klick</button></div>
+      <div class="sh">Cues<span class="row"><button type="button" class="btn sm" id="cSuggest">Vorschlagen</button><button type="button" class="btn sm" id="cMem">+ Memory-Cue</button></span></div>
+      ${(t.cues || []).map(row).join('') || '<div class="hint">Noch keine Cues. Tasten 1–8 setzen Hot Cues an der aktuellen Position.</div>'}</div>`;
+  }
+
   function renderDeck() {
     const t = S.cur, el = $('#deck');
     if (!t) { el.innerHTML = '<div class="deckempty mut">Kein Titel geladen – Doppelklick auf einen Titel lädt ihn hier ins Deck.</div>'; return; }
     el.innerHTML = `
       <button class="btn primary icon big" id="pp" aria-label="Wiedergabe / Pause">${audio.paused ? IC.play : IC.pause}</button>
+      ${t.cover ? `<img class="cover" data-cover="${t.id}" alt="">` : ''}
       <div class="dinfo"><div class="dt">${esc(t.title)}</div><div class="da">${esc(t.artist)}</div>
-        <div class="dm"><span id="dtime">0:00</span> / ${time(t.duration)}${t.bpm ? ` · <b>${(Math.round(t.bpm * 10) / 10).toLocaleString('de-DE')}</b> BPM` : ''}${t.key ? ` · <b>${esc(keyShow(t.key))}</b>` : ''}</div></div>
+        <div class="dm"><span id="dtime">${time(audio.currentTime)}</span> / ${time(t.duration)}${t.bpm ? ` · <b>${(Math.round(t.bpm * 10) / 10).toLocaleString('de-DE')}</b> BPM` : ''}${t.key ? ` · <b>${esc(keyShow(t.key))}</b>` : ''}</div></div>
       <div class="dwave"><canvas id="wave"></canvas></div>
-      <div class="dside"><div class="cues">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => { const c = (t.cues || []).find(x => x.n === n); return `<button class="cue${c ? ' set' : ''}" data-cue="${n}" style="--c:${CUE_COLORS[n]}" title="${c ? 'Springen zu ' + time(c.t) + ' · Rechtsklick löscht' : 'Cue an aktueller Position setzen'}">${n + 1}</button>`; }).join('')}</div>
-        <div class="row"><button class="btn sm" id="bMatch" ${t.key ? '' : 'disabled'}>Passende Titel</button><input type="range" id="vol" min="0" max="1" step="0.01" value="${S.settings.volume}" aria-label="Lautstärke"></div></div>`;
+      <div class="dside"><div class="cues">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => { const c = (t.cues || []).find(x => x.n === n); return `<button class="cue${c ? ' set' : ''}${c && c.len ? ' lp' : ''}${c && S.loop === c ? ' active' : ''}" data-cue="${n}" style="--c:${c ? cueColor(c) : CUE_COLORS[n]}" title="${c ? esc((c.name ? c.name + ' · ' : '') + time2(c.t) + (c.len ? ' · Loop' : '')) + ' · Rechtsklick löscht' : 'Cue an aktueller Position setzen'}">${n + 1}</button>`; }).join('')}</div>
+        <div class="row"><button class="btn sm${S.panel ? ' active' : ''}" id="bEdit">Cues &amp; Raster</button><button class="btn sm" id="bMatch" ${t.key ? '' : 'disabled'}>Passende Titel</button><input type="range" id="vol" min="0" max="1" step="0.01" value="${S.settings.volume}" aria-label="Lautstärke"></div></div>
+      ${S.panel ? panelHtml(t) : ''}`;
+    fillCovers(el);
     drawWave();
   }
 
@@ -603,35 +832,43 @@
     if (!cv || !t) return;
     const w = cv.clientWidth, h = cv.clientHeight, dpr = devicePixelRatio || 1;
     if (!w) return;
-    cv.width = w * dpr; cv.height = h * dpr;
+    if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
     const g = cv.getContext('2d');
-    g.scale(dpr, dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const ink = S.settings.theme === 'light' ? '17,19,21' : '244,240,232';
     const dur = t.duration || audio.duration || 0, pos = dur ? audio.currentTime / dur : 0, mid = h / 2;
     const wave = S.curWave;
+    if (dur) for (const c of t.cues || []) if (c.len) { // Loop-Bereiche
+      g.fillStyle = cueColor(c); g.globalAlpha = S.loop === c ? 0.34 : 0.16;
+      g.fillRect(c.t / dur * w, 0, Math.max(2, c.len / dur * w), h);
+      g.globalAlpha = 1;
+    }
     if (wave) {
       for (let x = 0; x < w; x++) {
         const v = wave[Math.min(wave.length - 1, Math.floor(x / w * wave.length))] / 255;
-        g.fillStyle = x / w < pos ? '#B79A6B' : 'rgba(244,240,232,.42)';
+        g.fillStyle = x / w < pos ? '#B79A6B' : `rgba(${ink},.42)`;
         g.fillRect(x, mid - v * (mid - 3), 1, Math.max(1, v * (h - 6)));
       }
     } else {
-      g.fillStyle = 'rgba(244,240,232,.18)'; g.fillRect(0, mid, w, 1);
+      g.fillStyle = `rgba(${ink},.18)`; g.fillRect(0, mid, w, 1);
       g.fillStyle = '#B79A6B'; g.fillRect(0, mid, w * pos, 1);
-      g.fillStyle = '#B9B5AD'; g.font = '12px "Fira Sans", sans-serif'; g.textAlign = 'center';
+      g.fillStyle = `rgba(${ink},.7)`; g.font = '12px "Fira Sans", sans-serif'; g.textAlign = 'center';
       g.fillText('Noch keine Wellenform – Titel analysieren', w / 2, mid - 10);
     }
     if (dur && t.bpm) { // Taktstriche alle 16 Beats
-      g.fillStyle = 'rgba(244,240,232,.16)';
+      g.fillStyle = `rgba(${ink},.16)`;
       const step = 60 / t.bpm * 16;
       for (let s = t.gridStart || 0; s < dur; s += step) g.fillRect(Math.round(s / dur * w), 0, 1, h);
     }
     if (dur) for (const c of t.cues || []) {
       const x = Math.round(c.t / dur * w);
-      g.fillStyle = CUE_COLORS[c.n]; g.fillRect(x, 0, 2, h);
+      g.fillStyle = cueColor(c); g.fillRect(x, 0, 2, h);
+      if (c.n < 0) { g.beginPath(); g.moveTo(x - 4, 0); g.lineTo(x + 6, 0); g.lineTo(x + 1, 8); g.fill(); continue; }
       g.fillRect(x, 0, 13, 13);
       g.fillStyle = '#111315'; g.font = '600 10px "Fira Sans", sans-serif'; g.textAlign = 'center'; g.fillText(c.n + 1, x + 7, 10);
     }
-    g.fillStyle = '#F4F0E8'; g.fillRect(Math.round(pos * w), 0, 1.5, h);
+    g.fillStyle = `rgb(${ink})`; g.fillRect(Math.round(pos * w), 0, 1.5, h);
   }
 
   async function load(t, autoplay = true) {
@@ -644,31 +881,128 @@
     if (t.missing) { delete t.missing; await DB.put('tracks', t); }
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     audioUrl = URL.createObjectURL(f);
-    S.cur = t; S.curCounted = false;
+    S.cur = t; S.curCounted = false; S.loop = null; lastBeat = -1;
     S.curWave = await DB.get('waves', t.id) || null;
     audio.src = audioUrl;
-    audio.volume = S.settings.volume;
+    applyVol();
     renderDeck(); drawRows();
     if (autoplay) audio.play().catch(() => {});
   }
-  function unload() { audio.pause(); audio.removeAttribute('src'); S.cur = null; S.curWave = null; renderDeck(); drawRows(); }
+  function unload() { audio.pause(); audio.removeAttribute('src'); S.cur = null; S.curWave = null; S.loop = null; renderDeck(); drawRows(); }
   const toggle = () => { if (S.cur) audio.paused ? audio.play().catch(() => {}) : audio.pause(); };
 
+  function cuePos() {
+    const t = S.cur;
+    let pos = audio.currentTime;
+    if (S.settings.quantize && t.bpm) { const b = 60 / t.bpm; pos = Math.max(0, Math.round((pos - (t.gridStart || 0)) / b) * b + (t.gridStart || 0)); }
+    return Math.round(pos * 1000) / 1000;
+  }
+  async function saveCur() { await DB.put('tracks', S.cur); renderDeck(); }
   async function cue(n, remove) {
     const t = S.cur;
     if (!t) return;
     t.cues = t.cues || [];
     const c = t.cues.find(x => x.n === n);
-    if (remove) { if (!c) return; t.cues = t.cues.filter(x => x.n !== n); }
-    else if (c) { audio.currentTime = c.t; return drawWave(); }
-    else {
-      let pos = audio.currentTime;
-      if (S.settings.quantize && t.bpm) { const b = 60 / t.bpm; pos = Math.max(0, Math.round((pos - (t.gridStart || 0)) / b) * b + (t.gridStart || 0)); }
-      t.cues.push({ n, t: Math.round(pos * 1000) / 1000, name: '' });
-      t.cues.sort((a, b) => a.n - b.n);
+    if (remove) { if (!c) return; snap('Cue löschen', [t]); t.cues = t.cues.filter(x => x !== c); if (S.loop === c) S.loop = null; }
+    else if (c) { audio.currentTime = c.t; S.loop = c.len ? (S.loop === c ? null : c) : null; return renderDeck(); }
+    else { snap('Cue setzen', [t]); t.cues.push({ n, t: cuePos(), name: '' }); t.cues.sort((a, b) => a.t - b.t); }
+    await saveCur();
+  }
+  /* Bearbeiten einer Cue-Zeile im Bereich „Cues & Raster“ */
+  async function cueEdit(i, what, value) {
+    const t = S.cur, c = t && (t.cues || [])[i];
+    if (!c) return;
+    if (what === 'go') { audio.currentTime = c.t; S.loop = c.len ? c : null; return drawWave(); }
+    snap('Cue bearbeiten', [t]);
+    if (what === 'del') { t.cues.splice(i, 1); if (S.loop === c) S.loop = null; }
+    else if (what === 'name') c.name = value.trim();
+    else if (what === 'len') { const b = +value; if (b && t.bpm) c.len = Math.round(b * 60 / t.bpm * 1000) / 1000; else { delete c.len; if (S.loop === c) S.loop = null; } }
+    else if (what === 'color') { const k = CUE_COLORS.indexOf(cueColor(c)); c.color = CUE_COLORS[(k + 1) % CUE_COLORS.length]; }
+    await saveCur();
+  }
+  async function memoryCue() {
+    const t = S.cur;
+    if (!t) return;
+    snap('Memory-Cue', [t]);
+    t.cues = t.cues || [];
+    t.cues.push({ n: -1, t: cuePos(), name: '' });
+    t.cues.sort((a, b) => a.t - b.t);
+    await saveCur();
+  }
+
+  async function grid(op, value) {
+    const t = S.cur;
+    if (!t) return;
+    if (op === 'click') { S.click = !S.click; lastBeat = -1; return renderDeck(); }
+    if (op === 'bpm') {
+      const v = Math.round((parseFloat(String(value).replace(',', '.')) || 0) * 100) / 100;
+      if (v < 30 || v > 300) return toast('BPM zwischen 30 und 300 eingeben.', true);
+      snap('Beatraster', [t]); t.bpm = v;
+    } else {
+      if (!t.bpm) return toast('Zuerst BPM eintragen oder den Titel analysieren.', true);
+      snap('Beatraster', [t]);
+      if (op === 'half') t.bpm = Math.round(t.bpm / 2 * 100) / 100;
+      else if (op === 'double') t.bpm = Math.round(t.bpm * 2 * 100) / 100;
+      else if (op === 'here') t.gridStart = audio.currentTime;
+      else t.gridStart = (t.gridStart || 0) + (+op) / 1000;
     }
-    await DB.put('tracks', t);
-    renderDeck();
+    const b = 60 / t.bpm;
+    t.gridStart = Math.round(((((t.gridStart || 0) % b) + b) % b) * 1000) / 1000;
+    await saveCur();
+    drawRows();
+  }
+
+  /* Cue-Vorschläge: Start sowie die stärksten Pegelsprünge an Phrasengrenzen (32 Beats) */
+  async function suggestCues() {
+    const t = S.cur, w = S.curWave;
+    if (!t || !w || !t.bpm || !t.duration) return toast('Dafür muss der Titel analysiert sein.', true);
+    const beat = 60 / t.bpm, dur = t.duration;
+    const phrase = (dur / beat >= 128 ? 32 : 16) * beat;
+    const lvl = (a, b) => { const i = Math.max(0, Math.floor(a / dur * w.length)), j = Math.min(w.length, Math.ceil(b / dur * w.length)); let sum = 0; for (let k = i; k < j; k++) sum += w[k]; return j > i ? sum / (j - i) : 0; };
+    const cand = [];
+    for (let p = (t.gridStart || 0) + phrase; p < dur - phrase / 2; p += phrase) cand.push({ t: p, d: lvl(p, p + phrase) - lvl(p - phrase, p) });
+    const ups = cand.filter(c => c.d > 10).sort((a, b) => b.d - a.d).slice(0, 3).map(c => ({ t: c.t, name: 'Einsatz' }));
+    const down = cand.filter(c => c.d < -10).sort((a, b) => a.d - b.d).slice(0, 1).map(c => ({ t: c.t, name: 'Break' }));
+    const picks = [{ t: t.gridStart || 0, name: 'Start' }, ...ups, ...down].sort((a, b) => a.t - b.t);
+    snap('Cues vorschlagen', [t]);
+    t.cues = t.cues || [];
+    let added = 0;
+    for (const p of picks) {
+      if (t.cues.some(c => Math.abs(c.t - p.t) < beat)) continue;
+      const n = [0, 1, 2, 3, 4, 5, 6, 7].find(k => !t.cues.some(c => c.n === k));
+      if (n === undefined) break;
+      t.cues.push({ n, t: Math.round(p.t * 1000) / 1000, name: p.name });
+      added++;
+    }
+    t.cues.sort((a, b) => a.t - b.t);
+    await saveCur();
+    toast(added ? `${added} Cue${added === 1 ? '' : 's'} vorgeschlagen – bitte prüfen.` : 'Keine weiteren sinnvollen Stellen gefunden.');
+  }
+
+  /* Laufende Wiedergabe: Loop halten, Klick auf den Beat, Wellenform nachführen */
+  let lastBeat = -1, actx = null;
+  function blip(accent) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain(), now = actx.currentTime;
+      o.frequency.value = accent ? 1600 : 1100;
+      g.gain.setValueAtTime(0.25, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      o.connect(g).connect(actx.destination);
+      o.start(now); o.stop(now + 0.06);
+    } catch { /* ohne Tonausgabe weiter */ }
+  }
+  function holdLoop() { if (S.loop && audio.currentTime >= S.loop.t + S.loop.len) audio.currentTime = S.loop.t; }
+  function tick() {
+    const t = S.cur;
+    if (t && !audio.paused) {
+      holdLoop();
+      if (S.click && t.bpm) {
+        const b = Math.floor((audio.currentTime - (t.gridStart || 0)) / (60 / t.bpm));
+        if (b !== lastBeat) { if (lastBeat !== -1 && b === lastBeat + 1) blip(((b % 4) + 4) % 4 === 0); lastBeat = b; }
+      }
+      drawWave();
+    }
+    requestAnimationFrame(tick);
   }
 
   /* ---------- Import / Export ---------- */
@@ -735,19 +1069,29 @@
     for (const [id, w] of await DB.entries('waves')) waves[id] = b64(w);
     download(`one-library-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ app: 'one-library', version: 1, created: new Date().toISOString(), settings: S.settings, tracks: [...S.tracks.values()], lists: S.lists, waves }), 'application/json');
   }
-  async function restore(data) {
+  async function restore(data, auto) {
     if (!data || data.app !== 'one-library' || !Array.isArray(data.tracks)) throw new Error('Das ist kein ONE-Library-Backup.');
     if (!(await confirmBox('Backup einspielen', `Die aktuelle Bibliothek (${nf(S.tracks.size)} Titel) wird durch das Backup (${nf(data.tracks.length)} Titel) ersetzt.`, 'Ersetzen'))) return;
-    for (const s of ['tracks', 'lists', 'waves']) await DB.clear(s);
+    for (const s of auto ? ['tracks', 'lists'] : ['tracks', 'lists', 'waves']) await DB.clear(s);
     await saveTracks(data.tracks);
     await DB.putMany('lists', data.lists || []);
     for (const [id, w] of Object.entries(data.waves || {})) await DB.put('waves', unb64(w), id);
     S.settings = { ...S.settings, ...(data.settings || {}) };
     await saveSettings();
+    applyTheme(); undoStack.length = 0;
     S.tracks = new Map(data.tracks.map(t => [t.id, t])); S.lists = data.lists || [];
     unload();
     setView({ type: 'all' });
     toast('Backup eingespielt.');
+  }
+
+  /* Automatische Sicherung: höchstens einmal am Tag, die letzten 7 bleiben im Browser gespeichert */
+  async function autoBackup() {
+    if (!S.tracks.size) return;
+    const keys = (await DB.entries('backups')).map(([k]) => +k).sort((a, b) => b - a);
+    if (keys.length && Date.now() - keys[0] < 20 * 3600e3) return;
+    await DB.put('backups', { app: 'one-library', version: 1, created: new Date().toISOString(), settings: S.settings, tracks: [...S.tracks.values()], lists: S.lists }, Date.now());
+    await DB.delMany('backups', keys.slice(6));
   }
 
   async function exportDialog() {
@@ -786,14 +1130,22 @@
   }
 
   async function settingsDialog() {
+    const backups = (await DB.entries('backups')).sort((a, b) => b[0] - a[0]);
+    let pick = null;
     const f = await modal({ title: 'Einstellungen',
-      body: `<label class="field"><span class="lbl">Tonart-Anzeige</span><select class="in" name="keyMode"><option value="camelot">Quintenzirkel-Nummern (8A, 8B …)</option><option value="musical"${S.settings.keyMode === 'musical' ? ' selected' : ''}>Musikalisch (Am, C …)</option></select></label>
+      body: `<label class="field"><span class="lbl">Darstellung</span><select class="in" name="theme"><option value="dark">Dunkel</option><option value="light"${S.settings.theme === 'light' ? ' selected' : ''}>Hell</option></select></label>
+        <label class="field"><span class="lbl">Tonart-Anzeige</span><select class="in" name="keyMode"><option value="camelot">Quintenzirkel-Nummern (8A, 8B …)</option><option value="musical"${S.settings.keyMode === 'musical' ? ' selected' : ''}>Musikalisch (Am, C …)</option></select></label>
         <label class="tog"><input type="checkbox" name="quantize"${S.settings.quantize ? ' checked' : ''}><span class="sw"></span><span><span class="tl">Cues am Beatraster einrasten</span><small>Neue Cue-Punkte springen auf den nächsten Beat, sobald der Titel analysiert ist.</small></span></label>
+        <label class="tog"><input type="checkbox" name="normalize"${S.settings.normalize ? ' checked' : ''}><span class="sw"></span><span><span class="tl">Lautstärke beim Vorhören angleichen</span><small>Laute Titel werden im Deck leiser wiedergegeben. Die Dateien bleiben unverändert.</small></span></label>
         <label class="field"><span class="lbl">Musikordner auf diesem Rechner (für Exporte)</span><input class="in" name="base" value="${esc(S.settings.basePath)}" placeholder="/Users/name/Music/"></label>
-        <div class="field"><span class="lbl">Verbundene Ordner</span>${S.roots.map(r => `<div class="mut">${esc(r.name)}</div>`).join('') || '<div class="mut">Noch keine.</div>'}</div>` });
+        <div class="field"><span class="lbl">Verbundene Ordner</span>${S.roots.map(r => `<div class="mut">${esc(r.name)}</div>`).join('') || '<div class="mut">Noch keine.</div>'}</div>
+        <div class="field"><span class="lbl">Automatische Sicherungen (täglich, die letzten 7)</span>${backups.length ? `<div class="row"><select class="in" id="bkSel">${backups.map(([k, b]) => `<option value="${k}">${new Date(+k).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })} – ${nf(b.tracks.length)} Titel</option>`).join('')}</select><button type="button" class="btn" id="bkGo">Wiederherstellen</button></div>` : '<div class="mut">Noch keine – die erste entsteht beim nächsten Start mit Titeln in der Bibliothek.</div>'}</div>`,
+      onOpen: ov => ov.addEventListener('click', e => { if (e.target.closest('#bkGo')) { pick = backups.find(([k]) => String(k) === $('#bkSel', ov).value); $('[data-x]', ov).click(); } }) });
+    if (pick) return restore(pick[1], true).catch(e => toast(e.message, true));
     if (!f) return;
-    S.settings.keyMode = f.keyMode.value; S.settings.quantize = f.quantize.checked; S.settings.basePath = f.base.value.trim();
+    S.settings.theme = f.theme.value; S.settings.keyMode = f.keyMode.value; S.settings.quantize = f.quantize.checked; S.settings.normalize = f.normalize.checked; S.settings.basePath = f.base.value.trim();
     await saveSettings();
+    applyTheme(); applyVol();
     refresh(); renderDeck();
   }
 
@@ -839,10 +1191,11 @@
     menu(e.clientX, e.clientY, [
       l.type === 'smart' ? { l: 'Regeln bearbeiten …', fn: () => editSmart(l) } : { l: 'Umbenennen …', fn: async () => {
         const f = await modal({ title: 'Playlist umbenennen', body: `<label class="field"><span class="lbl">Name</span><input class="in" name="name" required value="${esc(l.name)}"></label>` });
-        if (f) { l.name = f.name.value.trim() || l.name; await saveList(l); refresh(); }
+        if (f) { snap('Umbenennen'); l.name = f.name.value.trim() || l.name; await saveList(l); refresh(); }
       } },
       { l: 'Löschen …', fn: async () => {
         if (!(await confirmBox('Liste löschen', `„${l.name}“ löschen? Die Titel bleiben in der Bibliothek.`))) return;
+        snap('Liste löschen');
         S.lists = S.lists.filter(x => x !== l);
         await DB.del('lists', l.id);
         setView({ type: 'all' });
@@ -872,12 +1225,64 @@
       e.dataTransfer.effectAllowed = 'copy';
     });
 
+    // Playlist-Reihenfolge per Ziehen ändern (nur in der eigenen Reihenfolge, ohne Suchfilter)
+    const marker = document.createElement('div');
+    marker.className = 'dropline';
+    body.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes('application/x-one-tracks') || S.sort.f !== 'pos' || S.q) return;
+      e.preventDefault();
+      const r = body.getBoundingClientRect(), i = Math.max(0, Math.min(S.rows.length, Math.round((e.clientY - r.top + body.scrollTop) / ROW)));
+      marker.style.top = i * ROW - 1 + 'px'; marker.dataset.i = i;
+      $('#tspace').append(marker);
+    });
+    body.addEventListener('dragleave', e => { if (!body.contains(e.relatedTarget)) marker.remove(); });
+    body.addEventListener('drop', async e => {
+      if (!marker.isConnected) return;
+      e.preventDefault();
+      const i = +marker.dataset.i, list = S.lists.find(l => l.id === S.view.id);
+      marker.remove();
+      if (!list) return;
+      snap('Reihenfolge ändern');
+      const moving = new Set(S.sel), before = S.rows.slice(0, i).filter(t => !moving.has(t.id)).length;
+      const rest = list.trackIds.filter(id => !moving.has(id));
+      rest.splice(before, 0, ...list.trackIds.filter(id => moving.has(id)));
+      list.trackIds = rest;
+      await saveList(list);
+      refresh();
+    });
+
+    // Kopfzeile: Spalten wählen (Rechtsklick), verschieben (Ziehen), Breite ändern (rechter Rand)
+    const head = $('#thead');
+    let rzAt = 0;
+    head.addEventListener('contextmenu', e => { e.preventDefault(); colMenu(e); });
+    head.addEventListener('mousedown', e => {
+      if (!e.target.classList.contains('rz')) return;
+      e.preventDefault();
+      const th = e.target.parentElement, f = th.dataset.f, x0 = e.clientX, w0 = th.getBoundingClientRect().width;
+      const move = ev => { S.settings.cols.w[f] = Math.max(40, Math.round(w0 + ev.clientX - x0)); fitCols(true); drawRows(); };
+      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); rzAt = Date.now(); saveSettings(); };
+      addEventListener('mousemove', move); addEventListener('mouseup', up);
+    });
+    head.addEventListener('dragstart', e => { const th = e.target.closest('.th'); if (!th) return; e.dataTransfer.setData('application/x-one-col', th.dataset.f); e.dataTransfer.effectAllowed = 'move'; });
+    head.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-one-col') && e.target.closest('.th')) e.preventDefault(); });
+    head.addEventListener('drop', e => {
+      const th = e.target.closest('.th'), f = e.dataTransfer.getData('application/x-one-col');
+      if (!th || !f || FIXED_COL(th.dataset.f) || th.dataset.f === f) return;
+      e.preventDefault(); e.stopPropagation();
+      const cur = COLS.map(c => c.f).filter(x => !FIXED_COL(x)), after = cur.indexOf(f) < cur.indexOf(th.dataset.f);
+      const order = cur.filter(x => x !== f);
+      order.splice(order.indexOf(th.dataset.f) + (after ? 1 : 0), 0, f);
+      S.settings.cols.order = order;
+      saveSettings(); fitCols(true); drawRows();
+    });
+
     $('#thead').addEventListener('click', e => {
-      const th = e.target.closest('.th'); if (!th) return;
+      const th = e.target.closest('.th'); if (!th || e.target.classList.contains('rz') || Date.now() - rzAt < 300) return;
       const f = th.dataset.f;
       if (f === 'color') return;
       if (f === 'pos') { if ((S.lists.find(l => l.id === S.view.id) || {}).type !== 'list' || S.view.type !== 'list') return; S.sort = { f: 'pos', d: 1 }; }
-      else S.sort = { f, d: S.sort.f === f ? -S.sort.d : (['rating', 'added', 'bpm'].includes(f) ? -1 : 1) };
+      else S.sort = { f, d: S.sort.f === f ? -S.sort.d : (['rating', 'added', 'bpm', 'energy', 'playCount', 'lastPlayed'].includes(f) ? -1 : 1) };
+      S.settings.sorts[viewKey(S.view)] = S.sort; saveSettings();
       refresh();
     });
 
@@ -918,8 +1323,13 @@
     $('#bTools').addEventListener('click', e => {
       const r = e.currentTarget.getBoundingClientRect();
       menu(r.left, r.bottom + 4, [
-        { l: 'Suchen & Ersetzen …', fn: findReplace }, { l: 'Titel/Artist aus Dateiname', fn: fromFileName }, null,
-        { l: 'Dateien prüfen (fehlende finden)', fn: checkFiles }, { l: 'Duplikate anzeigen', fn: () => setView({ type: 'dupes' }) }
+        { l: 'Rückgängig' + (undoStack.length ? ': ' + undoStack[undoStack.length - 1].label : ''), off: !undoStack.length, fn: undo }, null,
+        { head: 'Auswahl bearbeiten' },
+        { l: 'Suchen & Ersetzen …', fn: findReplace }, { l: 'Titel/Artist aus Dateiname', fn: fromFileName },
+        { l: 'Groß-/Kleinschreibung bereinigen', fn: () => batch('caps') }, { l: 'Artist und Titel tauschen', fn: () => batch('swap') }, { l: 'Leerzeichen bereinigen', fn: () => batch('trim') },
+        { l: 'Tags in Dateien schreiben (MP3, FLAC) …', fn: writeTags }, null,
+        { head: 'Bibliothek' },
+        { l: 'Dateien prüfen (fehlende finden)', fn: checkFiles }, { l: 'Duplikate anzeigen', fn: () => setView({ type: 'dupes' }) }, { l: 'Duplikate zusammenführen …', fn: mergeDupes }
       ]);
       e.stopPropagation();
     });
@@ -950,19 +1360,38 @@
       const c = e.target.closest('[data-cue]');
       if (c) return cue(+c.dataset.cue, e.altKey || e.shiftKey);
       if (e.target.closest('#bMatch')) return setView({ type: 'match', id: S.cur.id });
+      if (e.target.closest('#bEdit')) { S.panel = !S.panel; return renderDeck(); }
+      const g = e.target.closest('[data-grid]');
+      if (g) return grid(g.dataset.grid);
+      if (e.target.closest('#cSuggest')) return suggestCues();
+      if (e.target.closest('#cMem')) return memoryCue();
+      const row = e.target.closest('.crow');
+      if (row) {
+        if (e.target.closest('[data-cdel]')) return cueEdit(+row.dataset.i, 'del');
+        if (e.target.closest('[data-cgo]')) return cueEdit(+row.dataset.i, 'go');
+        if (e.target.closest('[data-ccolor]')) return cueEdit(+row.dataset.i, 'color');
+        return;
+      }
       if (e.target.id === 'wave' && S.cur) {
         const r = e.target.getBoundingClientRect(), dur = S.cur.duration || audio.duration;
-        if (dur) { audio.currentTime = (e.clientX - r.left) / r.width * dur; drawWave(); }
+        if (dur) { audio.currentTime = (e.clientX - r.left) / r.width * dur; S.loop = null; lastBeat = -1; drawWave(); }
       }
     });
+    deck.addEventListener('change', e => {
+      const row = e.target.closest('.crow');
+      if (row && e.target.matches('[data-cname]')) return cueEdit(+row.dataset.i, 'name', e.target.value);
+      if (row && e.target.matches('[data-clen]')) return cueEdit(+row.dataset.i, 'len', e.target.value);
+      if (e.target.id === 'gBpm') grid('bpm', e.target.value);
+    });
     deck.addEventListener('contextmenu', e => { const c = e.target.closest('[data-cue]'); if (c) { e.preventDefault(); cue(+c.dataset.cue, true); } });
-    deck.addEventListener('input', e => { if (e.target.id === 'vol') { audio.volume = S.settings.volume = +e.target.value; saveSettings(); } });
+    deck.addEventListener('input', e => { if (e.target.id === 'vol') { S.settings.volume = +e.target.value; applyVol(); saveSettings(); } });
 
     audio.addEventListener('timeupdate', () => {
       const el = $('#dtime'); if (el) el.textContent = time(audio.currentTime);
+      holdLoop();
       drawWave();
       const t = S.cur;
-      if (t && !S.curCounted && audio.currentTime > 30) { S.curCounted = true; t.playCount = (t.playCount || 0) + 1; DB.put('tracks', t); }
+      if (t && !S.curCounted && audio.currentTime > Math.min(30, (t.duration || 60) / 2)) { S.curCounted = true; t.playCount = (t.playCount || 0) + 1; t.lastPlayed = Date.now(); DB.put('tracks', t); }
     });
     const pp = () => { const b = $('#pp'); if (b) b.innerHTML = audio.paused ? IC.play : IC.pause; drawRows(); };
     audio.addEventListener('play', pp); audio.addEventListener('pause', pp);
@@ -974,6 +1403,7 @@
       const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); return $('#q').select(); }
       if (typing || $('.ov')) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
       if (e.key === 'Escape') return closeMenu();
       if (e.code === 'Space') { e.preventDefault(); return toggle(); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); S.sel = new Set(S.rows.map(t => t.id)); drawRows(); renderInspector(); return renderCount(); }
@@ -1018,13 +1448,25 @@
       S.tracks = new Map(tracks.map(t => [t.id, t]));
       S.lists = lists;
       S.settings = { ...S.settings, ...(settings || {}) };
+      S.settings.cols = { hidden: [], shown: [], order: [], w: {}, ...(S.settings.cols || {}) };
+      S.settings.sorts = S.settings.sorts || {};
       S.roots = roots || [];
       for (const [id, h] of handles) S.files.set(id, h);
     } catch (e) { toast('Der lokale Speicher des Browsers ist nicht verfügbar – Änderungen gehen beim Schließen verloren.', true); }
+    applyTheme();
     bind();
-    fitCols();
+    fitCols(true);
     renderDeck();
     refresh();
+    requestAnimationFrame(tick);
+    // Aufräumen: Daten zu entfernten Titeln löschen, danach die tägliche Sicherung
+    try {
+      for (const store of ['waves', 'covers', 'handles']) {
+        const gone = (await DB.entries(store)).map(([k]) => k).filter(k => !S.tracks.has(k));
+        if (gone.length) { await DB.delMany(store, gone); for (const k of gone) S.files.delete(k); }
+      }
+      await autoBackup();
+    } catch { /* nicht kritisch */ }
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   }
   start();

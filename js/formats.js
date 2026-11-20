@@ -63,6 +63,16 @@ const Formats = (() => {
   const day = ms => new Date(ms || Date.now()).toISOString().slice(0, 10);
   const KIND = { mp3: 'MP3 File', m4a: 'M4A File', aac: 'M4A File', mp4: 'M4A File', flac: 'FLAC File', wav: 'WAV File', aif: 'AIFF File', aiff: 'AIFF File' };
   const ext = p => (/\.([a-z0-9]+)$/i.exec(p || '') || [, ''])[1].toLowerCase();
+  /* Cue übernehmen: Hot Cues 0–7 je einmal, alles andere als Memory-Cue (n = -1); len = Loop-Länge in Sekunden */
+  const addCue = (t, n, pos, name, len, color) => {
+    n = n >= 0 && n < 8 ? n : -1;
+    if (n >= 0 && t.cues.some(x => x.n === n)) return;
+    const c = { n, t: Math.round(pos * 1000) / 1000, name: name || '' };
+    if (len > 0) c.len = Math.round(len * 1000) / 1000;
+    if (color) c.color = color;
+    t.cues.push(c);
+    t.cues.sort((a, b) => a.t - b.t);
+  };
   const parseXml = text => {
     const doc = new DOMParser().parseFromString(text, 'application/xml');
     if (doc.querySelector('parsererror')) throw new Error('Datei ist kein gültiges XML.');
@@ -80,7 +90,10 @@ const Formats = (() => {
       const loc = 'file://localhost' + (p.startsWith('/') ? '' : '/') + p.split('/').map(encodeURIComponent).join('/').replace(/%3A/g, ':');
       out.push(`    <TRACK TrackID="${i + 1}" Name="${attr(t.title)}" Artist="${attr(t.artist)}" Album="${attr(t.album)}" Genre="${attr(t.genre)}" Kind="${KIND[ext(t.path)] || 'MP3 File'}" Size="${t.size || 0}" TotalTime="${Math.round(t.duration || 0)}" Year="${t.year || 0}" AverageBpm="${(t.bpm || 0).toFixed(2)}" DateAdded="${day(t.added)}" Comments="${attr(t.comment)}" PlayCount="${t.playCount || 0}" Rating="${(t.rating || 0) * 51}" Location="${attr(loc)}" Tonality="${attr(Keys.musical(t.key))}">`);
       if (t.bpm) out.push(`      <TEMPO Inizio="${(t.gridStart || 0).toFixed(3)}" Bpm="${t.bpm.toFixed(2)}" Metro="4/4" Battito="1"/>`);
-      for (const c of t.cues || []) out.push(`      <POSITION_MARK Name="${attr(c.name)}" Type="0" Start="${c.t.toFixed(3)}" Num="${c.n}"/>`);
+      for (const c of t.cues || []) {
+        const rgb = c.n >= 0 && /^#[0-9a-f]{6}$/i.test(c.color || '') ? ` Red="${parseInt(c.color.slice(1, 3), 16)}" Green="${parseInt(c.color.slice(3, 5), 16)}" Blue="${parseInt(c.color.slice(5, 7), 16)}"` : '';
+        out.push(`      <POSITION_MARK Name="${attr(c.name)}" Type="${c.len ? 4 : 0}" Start="${c.t.toFixed(3)}"${c.len ? ` End="${(c.t + c.len).toFixed(3)}"` : ''} Num="${c.n}"${rgb}/>`);
+      }
       out.push('    </TRACK>');
     });
     out.push('  </COLLECTION>', '  <PLAYLISTS>', `    <NODE Type="0" Name="ROOT" Count="${lists.length}">`);
@@ -106,8 +119,9 @@ const Formats = (() => {
         key: Keys.parse(a('Tonality')), duration: +a('TotalTime') || 0, rating: Math.round((+a('Rating') || 0) / 51), comment: a('Comments'), path, size: +a('Size') || 0,
         playCount: +a('PlayCount') || 0, gridStart: tempo ? +tempo.getAttribute('Inizio') || 0 : 0, cues: [] };
       for (const c of e.querySelectorAll('POSITION_MARK')) {
-        const n = +c.getAttribute('Num');
-        if (n >= 0 && n < 8 && !t.cues.some(x => x.n === n)) t.cues.push({ n, t: +c.getAttribute('Start') || 0, name: c.getAttribute('Name') || '' });
+        const start = +c.getAttribute('Start') || 0, end = +c.getAttribute('End') || 0, r = c.getAttribute('Red');
+        const hex = r === null ? '' : '#' + [r, c.getAttribute('Green'), c.getAttribute('Blue')].map(v => (+v || 0).toString(16).padStart(2, '0')).join('');
+        addCue(t, +c.getAttribute('Num'), start, c.getAttribute('Name'), end > start ? end - start : 0, hex);
       }
       byId.set(a('TrackID'), tracks.length);
       tracks.push(t);
@@ -150,7 +164,7 @@ const Formats = (() => {
       if (t.bpm) out.push(`      <TEMPO BPM="${t.bpm.toFixed(6)}" BPM_QUALITY="100.000000"/>`);
       if (k) out.push(`      <MUSICAL_KEY VALUE="${k.pc + (k.minor ? 12 : 0)}"/>`);
       if (t.bpm) out.push(`      <CUE_V2 NAME="AutoGrid" DISPL_ORDER="0" TYPE="4" START="${((t.gridStart || 0) * 1000).toFixed(6)}" LEN="0.000000" REPEATS="-1" HOTCUE="-1"/>`);
-      for (const c of t.cues || []) out.push(`      <CUE_V2 NAME="${attr(c.name || 'Cue ' + (c.n + 1))}" DISPL_ORDER="0" TYPE="0" START="${(c.t * 1000).toFixed(6)}" LEN="0.000000" REPEATS="-1" HOTCUE="${c.n}"/>`);
+      for (const c of t.cues || []) out.push(`      <CUE_V2 NAME="${attr(c.name || (c.n >= 0 ? 'Cue ' + (c.n + 1) : 'Cue'))}" DISPL_ORDER="0" TYPE="${c.len ? 5 : 0}" START="${(c.t * 1000).toFixed(6)}" LEN="${((c.len || 0) * 1000).toFixed(6)}" REPEATS="-1" HOTCUE="${c.n}"/>`);
       out.push('    </ENTRY>');
     }
     out.push('  </COLLECTION>', '  <PLAYLISTS>', '    <NODE TYPE="FOLDER" NAME="$ROOT">', `      <SUBNODES COUNT="${lists.length}">`);
@@ -179,7 +193,7 @@ const Formats = (() => {
       for (const c of e.querySelectorAll('CUE_V2')) {
         const type = c.getAttribute('TYPE'), n = +c.getAttribute('HOTCUE'), start = (+c.getAttribute('START') || 0) / 1000;
         if (type === '4') t.gridStart = start;
-        else if (n >= 0 && n < 8 && !t.cues.some(x => x.n === n)) t.cues.push({ n, t: start, name: c.getAttribute('NAME') || '' });
+        else addCue(t, n, start, c.getAttribute('NAME'), type === '5' ? (+c.getAttribute('LEN') || 0) / 1000 : 0);
       }
       if (t.bpm && t.gridStart) t.gridStart %= 60 / t.bpm;
       byKey.set(vol + dir + file, tracks.length);
@@ -237,7 +251,7 @@ const Formats = (() => {
         `  <Infos SongLength="${(t.duration || 0).toFixed(3)}" FirstSeen="${Math.round((t.added || Date.now()) / 1000)}" PlayCount="${t.playCount || 0}"/>`);
       if (t.comment) out.push(`  <Comment>${attr(t.comment)}</Comment>`);
       if (spb) out.push(`  <Scan Version="801" Bpm="${spb}"${key ? ` Key="${attr(key)}"` : ''}/>`, `  <Poi Pos="${(t.gridStart || 0).toFixed(6)}" Type="beatgrid"/>`);
-      for (const c of t.cues || []) out.push(`  <Poi Name="${attr(c.name || 'Cue ' + (c.n + 1))}" Pos="${c.t.toFixed(6)}" Num="${c.n + 1}" Type="cue"/>`);
+      for (const c of t.cues || []) out.push(`  <Poi Name="${attr(c.name || (c.n >= 0 ? 'Cue ' + (c.n + 1) : 'Cue'))}" Pos="${c.t.toFixed(6)}"${c.n >= 0 ? ` Num="${c.n + 1}"` : ''} Type="cue"/>`);
       out.push(' </Song>');
     }
     out.push('</VirtualDJ_Database>');
@@ -261,10 +275,9 @@ const Formats = (() => {
       for (const p of e.querySelectorAll('Poi')) {
         const type = p.getAttribute('Type') || 'cue', pos = +p.getAttribute('Pos') || 0, n = (+p.getAttribute('Num') || 0) - 1;
         if (type === 'beatgrid') t.gridStart = pos;
-        else if (type === 'cue' && n >= 0 && n < 8 && !t.cues.some(x => x.n === n)) t.cues.push({ n, t: pos, name: p.getAttribute('Name') || '' });
+        else if (type === 'cue') addCue(t, n, pos, p.getAttribute('Name'));
       }
       if (t.bpm && t.gridStart) t.gridStart = Math.round((t.gridStart % (60 / t.bpm)) * 1000) / 1000;
-      t.cues.sort((a, b) => a.n - b.n);
       tracks.push(t);
     }
     return { kind: 'VirtualDJ-Datenbank', full: true, tracks, lists: [] };
