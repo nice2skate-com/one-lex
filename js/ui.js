@@ -381,7 +381,7 @@
       <section class="deck" id="deck"></section>
       <input type="file" id="pickFiles" multiple accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.aif,.aiff,.ogg,.opus" hidden>
       <input type="file" id="pickDir" webkitdirectory multiple hidden>
-      <input type="file" id="pickImport" accept=".xml,.nml,.m3u,.m3u8,.json" hidden>
+      <input type="file" id="pickImport" multiple hidden>
       <div id="toasts"></div>
       <div class="drop" id="drop" hidden><div>Dateien oder Ordner hier ablegen</div></div>`;
   }
@@ -672,41 +672,60 @@
   }
 
   /* ---------- Import / Export ---------- */
-  async function importData(file) {
-    const text = await file.text();
+  /* Importierte Titel mit der Bibliothek abgleichen: gleicher Pfad, gleiche Datei (Name + Größe) oder gleicher Dateiname am Pfadende */
+  async function mergeData(data) {
+    const np = p => String(p || '').replace(/\\/g, '/').toLowerCase(), base = p => np(p).split('/').pop();
+    const byPath = new Map(), bySize = new Map(), byFile = new Map();
+    const index = t => { byPath.set(np(t.path), t); if (t.size) bySize.set(base(t.path) + '|' + t.size, t); const k = base(t.path); (byFile.get(k) || byFile.set(k, []).get(k)).push(t); };
+    for (const t of S.tracks.values()) index(t);
+    const find = d => {
+      const p = np(d.path), name = base(d.path);
+      let t = byPath.get(p) || (d.size ? bySize.get(name + '|' + d.size) : null);
+      if (t) return t;
+      const c = byFile.get(name) || [];
+      return c.find(x => { const q = np(x.path); return p.endsWith('/' + q) || q.endsWith('/' + p); }) || (c.length === 1 && (!d.size || !c[0].size) ? c[0] : null);
+    };
+    const changed = [], ids = [];
+    let added = 0, merged = 0;
+    for (const d of data.tracks) {
+      let t = find(d);
+      if (t) {
+        for (const k of ['title', 'artist', 'album', 'genre', 'comment', 'key']) if (!t[k] && d[k]) t[k] = d[k];
+        for (const k of ['bpm', 'year', 'rating', 'duration', 'gridStart', 'playCount']) if (!t[k] && d[k]) t[k] = d[k];
+        if (!(t.cues || []).length && (d.cues || []).length) t.cues = d.cues;
+        if (!/^(\/|[A-Za-z]:)/.test(t.path) && /^(\/|[A-Za-z]:)/.test(d.path)) { t.path = d.path; byPath.set(np(t.path), t); } // vollständigen Pfad übernehmen
+        merged++;
+      } else {
+        t = { id: uid(), title: '', artist: '', album: '', genre: '', year: 0, comment: '', bpm: 0, key: '', duration: 0, rating: 0, color: '', tags: [], cues: [], gridStart: 0, size: 0, added: Date.now(), playCount: 0, analyzed: false, ...d };
+        S.tracks.set(t.id, t); index(t);
+        added++;
+      }
+      changed.push(t); ids.push(t.id);
+    }
+    await saveTracks(changed);
+    for (const l of data.lists) {
+      let nl = S.lists.find(x => x.type === 'list' && x.name === l.name);
+      if (nl) nl.trackIds = [...new Set([...nl.trackIds, ...l.refs.map(i => ids[i])])];
+      else { nl = { id: uid(), type: 'list', name: l.name, trackIds: [...new Set(l.refs.map(i => ids[i]))] }; S.lists.push(nl); }
+      await saveList(nl);
+    }
+    return { added, merged, lists: data.lists.length };
+  }
+
+  async function importData(files) {
+    files = [...files];
     try {
-      if (/\.json$/i.test(file.name)) return await restore(JSON.parse(text));
-      const data = Formats.parse(text, file.name);
-      const byPath = new Map(), byName = new Map();
-      for (const t of S.tracks.values()) { byPath.set(t.path.toLowerCase(), t); byName.set(fileName(t).toLowerCase() + '|' + (t.size || 0), t); }
-      const changed = [], ids = [];
-      let added = 0, merged = 0;
-      for (const d of data.tracks) {
-        const name = d.path.replace(/\\/g, '/').split('/').pop().toLowerCase();
-        let t = byPath.get(d.path.toLowerCase()) || (d.size ? byName.get(name + '|' + d.size) : null);
-        if (t) {
-          for (const k of ['title', 'artist', 'album', 'genre', 'comment', 'key']) if (!t[k] && d[k]) t[k] = d[k];
-          for (const k of ['bpm', 'year', 'rating', 'duration', 'gridStart']) if (!t[k] && d[k]) t[k] = d[k];
-          if (!(t.cues || []).length && d.cues.length) t.cues = d.cues;
-          merged++;
-        } else {
-          t = { id: uid(), title: '', artist: '', album: '', genre: '', year: 0, comment: '', bpm: 0, key: '', duration: 0, rating: 0, color: '', tags: [], cues: [], gridStart: 0, size: 0, added: Date.now(), playCount: 0, analyzed: false, ...d };
-          S.tracks.set(t.id, t); byPath.set(t.path.toLowerCase(), t);
-          added++;
-        }
-        changed.push(t); ids.push(t.id);
-      }
-      await saveTracks(changed);
-      for (const l of data.lists) {
-        let nl = S.lists.find(x => x.type === 'list' && x.name === l.name);
-        if (nl) nl.trackIds = [...new Set([...nl.trackIds, ...l.refs.map(i => ids[i])])];
-        else { nl = { id: uid(), type: 'list', name: l.name, trackIds: [...new Set(l.refs.map(i => ids[i]))] }; S.lists.push(nl); }
-        await saveList(nl);
-      }
+      const json = files.find(f => /\.json$/i.test(f.name));
+      if (json) return await restore(JSON.parse(await json.text()));
+      const sets = [];
+      for (const f of files) sets.push(await Formats.parseFile(f));
+      sets.sort((a, b) => (b.full ? 1 : 0) - (a.full ? 1 : 0)); // Datenbanken vor Playlists, damit deren Angaben gewinnen
+      let added = 0, merged = 0, lists = 0;
+      for (const data of sets) { const r = await mergeData(data); added += r.added; merged += r.merged; lists += r.lists; }
       dirty();
-      toast(`${data.kind}: ${nf(added)} neue Titel, ${nf(merged)} ergänzt, ${nf(data.lists.length)} Playlists.`);
+      toast(`${[...new Set(sets.map(d => d.kind))].join(', ')}: ${nf(added)} neue Titel, ${nf(merged)} abgeglichen, ${nf(lists)} Playlists.`);
       if (added) toast('Zum Abspielen und Analysieren den Musikordner über „Musik hinzufügen“ wählen – die Dateien werden automatisch zugeordnet.');
-    } catch (e) { toast(e.message || 'Import fehlgeschlagen.', true); }
+    } catch (e) { dirty(); toast(e.message || 'Import fehlgeschlagen.', true); }
   }
 
   const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(s); };
@@ -735,6 +754,7 @@
     const f = await modal({ title: 'Exportieren', ok: 'Exportieren',
       body: `<label class="field"><span class="lbl">Format</span><select class="in" name="fmt">
           <option value="rb">Rekordbox XML – ganze Bibliothek mit Playlists</option><option value="nml">Traktor NML – ganze Bibliothek mit Playlists</option>
+          <option value="serato">Serato – Playlists als Crates (ZIP)</option><option value="vdj">VirtualDJ – database.xml und Playlists (ZIP)</option>
           <option value="m3u">M3U8-Playlist – aktuelle Ansicht</option><option value="csv">CSV-Tabelle – aktuelle Ansicht</option><option value="json">Backup (JSON) – alles</option></select></label>
         <label class="field"><span class="lbl">Musikordner auf diesem Rechner</span><input class="in" name="base" value="${esc(S.settings.basePath)}" placeholder="/Users/name/Music/"><small>Der Browser kennt keine vollständigen Dateipfade. Dieser Pfad wird den Ordnernamen aus der Bibliothek vorangestellt, damit die DJ-Software die Dateien findet.</small></label>` });
     if (!f) return;
@@ -745,6 +765,20 @@
     switch (f.fmt.value) {
       case 'rb': return download(`one-library-rekordbox-${stamp}.xml`, Formats.rekordboxExport(all, lists, absPath), 'application/xml');
       case 'nml': return download(`one-library-traktor-${stamp}.nml`, Formats.traktorExport(all, lists, absPath), 'application/xml');
+      case 'serato': {
+        if (!lists.length) return toast('Für Serato werden Playlists exportiert – bitte zuerst eine Playlist anlegen.', true);
+        return download(`one-library-serato-${stamp}.zip`, Formats.zip(Formats.seratoExport(lists, S.tracks, absPath)), 'application/zip');
+      }
+      case 'vdj': {
+        const used = new Set(), files = [{ name: 'database.xml', data: Formats.vdjExport(all, absPath) }];
+        for (const l of lists) {
+          let base = Formats.safeName(l.name), name = base;
+          for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base} ${i}`;
+          used.add(name.toLowerCase());
+          files.push({ name: `Playlists/${name}.m3u`, data: Formats.m3uExport(l.trackIds.map(id => S.tracks.get(id)).filter(Boolean), absPath) });
+        }
+        return download(`one-library-virtualdj-${stamp}.zip`, Formats.zip(files), 'application/zip');
+      }
       case 'm3u': return download(`one-library-${stamp}.m3u8`, Formats.m3uExport(S.rows, absPath), 'audio/x-mpegurl');
       case 'csv': return download(`one-library-${stamp}.csv`, Formats.csvExport(S.rows, S.settings.keyMode), 'text/csv');
       default: return backup();
@@ -891,14 +925,14 @@
     });
     $('#bIO').addEventListener('click', e => {
       const r = e.currentTarget.getBoundingClientRect();
-      menu(r.left, r.bottom + 4, [{ l: 'Importieren (Rekordbox XML, Traktor NML, M3U, Backup) …', fn: () => $('#pickImport').click() }, { l: 'Exportieren …', fn: exportDialog }, null, { l: 'Backup jetzt speichern', fn: backup }]);
+      menu(r.left, r.bottom + 4, [{ l: 'Importieren (Rekordbox, Traktor, Serato, VirtualDJ, M3U, Backup) …', fn: () => $('#pickImport').click() }, { l: 'Exportieren …', fn: exportDialog }, null, { l: 'Backup jetzt speichern', fn: backup }]);
       e.stopPropagation();
     });
     $('#bSet').addEventListener('click', settingsDialog);
     $('#bStop').addEventListener('click', () => { if (S.busy) S.busy.stop = true; });
     $('#pickFiles').addEventListener('change', e => { addItems(itemsFromFiles(e.target.files)); e.target.value = ''; });
     $('#pickDir').addEventListener('change', e => { addItems(itemsFromFiles(e.target.files)); e.target.value = ''; });
-    $('#pickImport').addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+    $('#pickImport').addEventListener('change', e => { if (e.target.files.length) importData(e.target.files); e.target.value = ''; });
 
     const insp = $('#insp');
     insp.addEventListener('change', e => { const f = e.target.dataset.f; if (f) edit(f, e.target.value); });
@@ -960,8 +994,8 @@
       if (!external(e)) return;
       e.preventDefault(); depth = 0; $('#drop').hidden = true;
       const dt = e.dataTransfer, items = [];
-      const one = [...dt.files].find(f => /\.(xml|nml|m3u8?|json)$/i.test(f.name));
-      if (one) return importData(one);
+      const data = [...dt.files].filter(f => /\.(xml|nml|m3u8?|json|crate|vdjfolder)$/i.test(f.name) || /^database V2$/i.test(f.name));
+      if (data.length) return importData(data);
       if (dt.items && dt.items[0] && dt.items[0].getAsFileSystemHandle) {
         const hs = await Promise.all([...dt.items].filter(i => i.kind === 'file').map(i => i.getAsFileSystemHandle()));
         status('Ordner wird gelesen …');
