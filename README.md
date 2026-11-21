@@ -35,8 +35,9 @@ Empfohlen ist Chrome oder Edge: Dort merkt sich die App die gewählten Musikordn
 - **Deck:** Vorhören mit Wellenform und Cover, 8 Hot Cues (Tasten 1–8, Umschalt löscht), Memory-Cues, Loops (4–32 Beats), Cue-Namen und -Farben, Cue-Vorschläge. Beatraster korrigieren (BPM, ÷2/×2, verschieben, „Beat hier“, Tempowechsel) mit Klick zum Prüfen; Zoom auf einen 8-Sekunden-Ausschnitt mit jedem Beat. Cues, die Serato in MP3-Dateien abgelegt hat, werden beim Hinzufügen übernommen. „Passende Titel“ nach Tonart und Tempo. Optional Lautstärke-Angleichung.
 - **Listen:** Playlists mit Ordnern („Ordner / Name“) und frei ziehbarer Reihenfolge, Smartlists mit Regeln, Regelgruppen und Obergrenze, Ansichten für zuletzt Gespieltes, Duplikate und fehlende Dateien. Duplikate lassen sich zusammenführen.
 - **Sicherung:** tägliche automatische Sicherung im Browser (die letzten 7, unter „Einstellungen“ wiederherstellbar) und vollständiges Backup als JSON-Datei.
-- **Darstellung:** dunkles und helles Design, anpassbare Tastenkürzel (Einstellungen).
-- **Nur Desktop-App:** Dateien nach Muster umbenennen; direkter Abgleich mit Serato, VirtualDJ, Traktor und rekordbox (Import / Export → „Direkter Abgleich“).
+- **Darstellung:** dunkles und helles Design, anpassbare Tastenkürzel, Sprache Deutsch oder Englisch (Einstellungen; ohne Auswahl richtet sie sich nach der Sprache des Browsers).
+- **Online ergänzen:** fehlendes Album, Jahr und Genre aus dem freien Katalog musicbrainz.org nachtragen (Werkzeuge). Gesendet werden nur Artist und Titel der ausgewählten Titel.
+- **Nur Desktop-App:** Dateien nach Muster umbenennen; direkter Abgleich mit Serato, VirtualDJ, Traktor und rekordbox sowie Einlesen des Verlaufs gespielter Titel aus Serato, VirtualDJ und Traktor (Import / Export → „Direkter Abgleich“).
 - **Austausch:** Import und Export für Rekordbox (XML), Traktor (NML), Serato, VirtualDJ und M3U8; CSV-Export. Loops und Memory-Cues gehen nach Rekordbox und Traktor mit.
 
 ### Serato
@@ -63,13 +64,13 @@ Jede Datei, die dabei ersetzt wird, wird vorher als Kopie mit der Endung `.one-s
 
 ## Grenzen
 
-- Cues und Beatraster werden nicht in die Audiodateien geschrieben. Nach Serato gehen deshalb Playlists sowie – über die geschriebenen Tags – BPM und Tonart; Serato-Cues werden gelesen, aber nicht geschrieben.
+- Cues für Serato lassen sich beim Tags-Schreiben mitschreiben (MP3, WAV, AIFF; nur wenn die Datei noch keine Serato-Cues hat). Das ist als experimentell gekennzeichnet, weil es nicht mit Serato gegengeprüft ist. Das Beatraster wird nicht in Dateien geschrieben.
 - Dateien mit ungewöhnlichen Tag-Varianten werden beim Schreiben übersprungen statt verändert.
 - rekordbox und Traktor lassen sich nicht direkt beschreiben (verschlüsselte bzw. programmeigene Datenbank); der Abgleich läuft dort über eine Austauschdatei. Engine DJ wird nicht unterstützt.
 - Umbenennen und direkter Abgleich gibt es nur in der Desktop-App.
 - Rückgängig gilt für Bearbeitungen in der Bibliothek, nicht für Importe, geschriebene oder umbenannte Dateien.
 - Im Browser sind keine vollständigen Dateipfade bekannt; für Exporte den Musikordner unter „Einstellungen“ eintragen.
-- Nicht enthalten: Verlauf aus der DJ-Software, Streaming-Dienste, Online-Suche nach Tags, weitere Sprachen.
+- Nicht enthalten: Streaming-Dienste. Weitere Sprachen brauchen je eine Datei in `js/lang/` nach dem Vorbild von `en.js`.
 - Der Austausch mit Rekordbox, Traktor, Serato und VirtualDJ ist noch nicht mit der jeweiligen Software gegengeprüft – vor dem ersten Einsatz deren Bibliothek sichern.
 
 ## Aufbau
@@ -82,4 +83,5 @@ Jede Datei, die dabei ersetzt wird, wird vorher als Kopie mit der Endung `.one-s
 | `js/analyze.js` | Tempo, Tonart, Wellenform |
 | `js/formats.js` | Tonart-Schreibweisen, Import/Export |
 | `js/ui.js` | Oberfläche und Abläufe |
+| `js/i18n.js`, `js/lang/` | Sprachumschaltung und Sprachpakete |
 | `desktop/` | Desktop-App (Electron): Dateizugriff, Umbenennen, direkter Abgleich |

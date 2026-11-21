@@ -43,8 +43,30 @@ const TagWrite = (() => {
   }
 
   /* Baut einen vollständigen ID3v2-Tag. old: vorhandener Tag samt Kopf (oder null); dessen übrige Inhalte bleiben erhalten. */
-  function id3Tag(old, t) {
-    let v4 = false;
+  /* Cues im Serato-Format (GEOB „Serato Markers2“). Aufbau nach der frei verfügbaren Formatbeschreibung; nicht mit Serato gegengeprüft. */
+  function seratoFrame(t, v4) {
+    const cues = t.cues || [];
+    const hot = cues.filter(c => c.n >= 0 && c.n < 8 && !c.len), loops = cues.filter(c => c.len).slice(0, 8);
+    if (!hot.length && !loops.length) return null;
+    const rgb = c => { const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c || ''); return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [204, 0, 0]; };
+    const u32 = n => Uint8Array.of(n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255);
+    const entry = (name, body) => concat([lat(name), Uint8Array.of(0), u32(body.length), body]);
+    const parts = [Uint8Array.of(1, 1), entry('COLOR', Uint8Array.of(0, 255, 255, 255))];
+    for (const c of hot) parts.push(entry('CUE', concat([Uint8Array.of(0, c.n), u32(Math.round(c.t * 1000)), Uint8Array.of(0, ...rgb(c.color), 0, 0), utf8(c.name || ''), Uint8Array.of(0)])));
+    loops.forEach((c, i) => parts.push(entry('LOOP', concat([Uint8Array.of(0, i), u32(Math.round(c.t * 1000)), u32(Math.round((c.t + c.len) * 1000)), Uint8Array.of(255, 255, 255, 255, 0, 0x27, 0xaa, 0xe1, 0, 0), utf8(c.name || ''), Uint8Array.of(0)]))));
+    parts.push(entry('BPMLOCK', Uint8Array.of(0)), Uint8Array.of(0));
+    let payload = concat(parts);
+    payload = concat([payload, new Uint8Array((3 - payload.length % 3) % 3)]); // Vielfaches von 3: Base64 ohne Füllzeichen
+    let bin = '';
+    for (let i = 0; i < payload.length; i++) bin += String.fromCharCode(payload[i]);
+    const b64 = btoa(bin).replace(/(.{72})/g, '$1\n');
+    const content = concat([Uint8Array.of(1, 1), lat(b64)]);
+    return frame('GEOB', concat([Uint8Array.of(0), lat('application/octet-stream'), Uint8Array.of(0, 0), lat('Serato Markers2'), Uint8Array.of(0), content, new Uint8Array(Math.max(1, 470 - content.length))]), v4);
+  }
+  const isSerato = body => { for (let i = 0; i < Math.min(body.length - 15, 120); i++) if (ascii(body, i, 15) === 'Serato Markers2' || ascii(body, i, 15) === 'Serato Markers_') return true; return false; };
+
+  function id3Tag(old, t, opts) {
+    let v4 = false, hasSerato = false;
     const kept = [];
     if (old && old.length >= 10 && ascii(old, 0, 3) === 'ID3') {
       const ver = old[3], flags = old[5];
@@ -61,6 +83,7 @@ const TagWrite = (() => {
         if (o + 10 + n > tag.length) throw new Error('Tag ist beschädigt');
         if (tag[o + 9] !== 0) throw new Error('Tag-Variante wird nicht unterstützt');
         const body = tag.subarray(o + 10, o + 10 + n);
+        if (id === 'GEOB' && isSerato(body)) hasSerato = true;
         if (!replace.has(id) && !(id === 'COMM' && plainComment(body))) kept.push(tag.subarray(o, o + 10 + n));
         o += 10 + n;
       }
@@ -73,19 +96,24 @@ const TagWrite = (() => {
       const sep = txt[0] === 1 ? Uint8Array.of(0xFF, 0xFE, 0, 0) : Uint8Array.of(0);
       fresh.push(frame('COMM', concat([txt.subarray(0, 1), utf8('deu'), sep, txt.subarray(1)]), v4));
     }
+    if (opts && opts.serato) { // vorhandene Serato-Daten nie überschreiben
+      const f = hasSerato ? null : seratoFrame(t, v4);
+      if (f) fresh.push(f);
+      opts.result = hasSerato ? 'kept' : f ? 'written' : '';
+    }
     const frames = concat([...fresh, ...kept]), size = frames.length + 1024;
     const h = Uint8Array.of(0x49, 0x44, 0x33, v4 ? 4 : 3, 0, 0, (size >> 21) & 127, (size >> 14) & 127, (size >> 7) & 127, size & 127);
     return concat([h, frames, new Uint8Array(1024)]);
   }
 
-  async function buildMp3(file, t) {
+  async function buildMp3(file, t, opts) {
     const head = await bytes(file, 0, 10);
     const audioStart = ascii(head, 0, 3) === 'ID3' ? 10 + synch(head, 6) : 0;
-    return concat([id3Tag(audioStart ? await bytes(file, 0, audioStart) : null, t), await bytes(file, audioStart, file.size)]);
+    return concat([id3Tag(audioStart ? await bytes(file, 0, audioStart) : null, t, opts), await bytes(file, audioStart, file.size)]);
   }
 
   /* ---------- WAV / AIFF: ID3-Tag als eigener Abschnitt am Dateiende ---------- */
-  async function buildChunked(file, t, little) {
+  async function buildChunked(file, t, little, opts) {
     const u8 = await bytes(file, 0, file.size);
     const sig = ascii(u8, 0, 4);
     if (sig !== (little ? 'RIFF' : 'FORM')) throw new Error(sig === 'RF64' ? 'sehr große WAV-Dateien (RF64) werden nicht unterstützt' : 'unerwarteter Dateianfang');
@@ -98,7 +126,7 @@ const TagWrite = (() => {
       else parts.push(u8.subarray(o, end), end - o < 8 + n + (n & 1) ? new Uint8Array(8 + n + (n & 1) - (end - o)) : new Uint8Array(0));
       o += 8 + n + (n & 1);
     }
-    const tag = id3Tag(old, t), ch = new Uint8Array(8), dv = new DataView(ch.buffer);
+    const tag = id3Tag(old, t, opts), ch = new Uint8Array(8), dv = new DataView(ch.buffer);
     (little ? 'id3 ' : 'ID3 ').split('').forEach((c, i) => { ch[i] = c.charCodeAt(0); });
     dv.setUint32(4, tag.length, little);
     parts.push(ch, tag, new Uint8Array(tag.length & 1));
@@ -226,12 +254,12 @@ const TagWrite = (() => {
   }
 
   /* Liefert den vollständigen neuen Dateiinhalt (Uint8Array). */
-  function build(file, t) {
-    if (/\.mp3$/i.test(file.name)) return buildMp3(file, t);
+  function build(file, t, opts) {
+    if (/\.mp3$/i.test(file.name)) return buildMp3(file, t, opts);
     if (/\.flac$/i.test(file.name)) return buildFlac(file, t);
     if (/\.(m4a|mp4)$/i.test(file.name)) return buildM4a(file, t);
-    if (/\.wav$/i.test(file.name)) return buildChunked(file, t, true);
-    if (/\.aiff?$/i.test(file.name)) return buildChunked(file, t, false);
+    if (/\.wav$/i.test(file.name)) return buildChunked(file, t, true, opts);
+    if (/\.aiff?$/i.test(file.name)) return buildChunked(file, t, false, opts);
     throw new Error('Dateityp wird nicht unterstützt');
   }
 

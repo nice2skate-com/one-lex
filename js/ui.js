@@ -5,9 +5,11 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const LOC = typeof I18n === 'undefined' ? 'de-DE' : I18n.locale; // Zahlen- und Datumsformat der gewählten Sprache
+  const tr = s => typeof I18n === 'undefined' ? s : I18n.t(s);     // für Texte außerhalb des Seiteninhalts (Wellenform)
   const time = s => { s = Math.max(0, Math.round(s || 0)); const m = Math.floor(s / 60); return (m >= 60 ? Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
-  const date = ms => ms ? new Date(ms).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
-  const nf = n => n.toLocaleString('de-DE');
+  const date = ms => ms ? new Date(ms).toLocaleDateString(LOC, { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+  const nf = n => n.toLocaleString(LOC);
   const ROW = 34;
   const COLORS = ['', '#B79A6B', '#C96A5A', '#D9A441', '#7FA66B', '#5E9BB5', '#8E7CC3', '#B9B5AD'];
   const CUE_COLORS = ['#C8AF82', '#C96A5A', '#D9A441', '#7FA66B', '#5E9BB5', '#8E7CC3', '#D987B0', '#F4F0E8'];
@@ -157,7 +159,7 @@
     closeMenu();
     const el = document.createElement('div');
     el.className = 'menu';
-    el.innerHTML = items.map((it, i) => !it ? '<hr>' : it.head ? `<div class="mhd">${esc(it.head)}</div>` : `<button data-i="${i}"${it.off ? ' disabled' : ''}>${esc(it.l)}</button>`).join('');
+    el.innerHTML = items.map((it, i) => !it ? '<hr>' : it.head ? `<div class="mhd">${esc(it.head)}</div>` : `<button data-i="${i}"${it.raw ? ' class="raw"' : ''}${it.off ? ' disabled' : ''}>${esc(it.l)}</button>`).join('');
     document.body.append(el);
     const r = el.getBoundingClientRect();
     el.style.left = Math.max(6, Math.min(x, innerWidth - r.width - 6)) + 'px';
@@ -558,7 +560,7 @@
       case 'pos': return S.cur === t ? `<span class="now">${audio.paused ? '❙❙' : '▶'}</span>` : `<span class="mut">${i + 1}</span>`;
       case 'color': return t.color ? `<i class="dot" style="background:${t.color}"></i>` : '';
       case 'title': return `<span class="tt${isMissing(t) ? ' miss' : ''}">${esc(t.title)}</span>`;
-      case 'bpm': return t.bpm ? (Math.round(t.bpm * 10) / 10).toLocaleString('de-DE') : '';
+      case 'bpm': return t.bpm ? (Math.round(t.bpm * 10) / 10).toLocaleString(LOC) : '';
       case 'key': { const m = /^(\d+)([AB])$/.exec(t.key || ''); return m ? `<span class="key" style="--h:${(+m[1] * 30 + 200) % 360}">${esc(keyShow(t.key))}</span>` : ''; }
       case 'duration': return t.duration ? time(t.duration) : '';
       case 'rating': return `<span class="stars">${'★'.repeat(t.rating || 0)}<s>${'★'.repeat(5 - (t.rating || 0))}</s></span>`;
@@ -801,28 +803,81 @@
     const ok = sel.filter(t => TagWrite.supported(fileName(t)));
     if (!ok.length) return toast('In der Auswahl ist keine Datei, deren Typ sich beschreiben lässt (MP3, FLAC, M4A, WAV, AIFF).', true);
     if (S.busy) return toast('Bitte warten, es läuft noch ein Vorgang.', true);
-    if (!(await modal({ title: 'Tags in Dateien schreiben', ok: 'Schreiben', body: `<p>Titel, Artist, Album, Genre, Jahr, BPM, Tonart und Kommentar werden in <b>${nf(ok.length)}</b> Audiodatei${ok.length === 1 ? '' : 'en'} geschrieben${ok.length < sel.length ? ` (${nf(sel.length - ok.length)} andere Dateitypen werden übersprungen)` : ''}.</p><p class="mut">Die Originaldateien werden dabei geändert; Cover und fremde Angaben bleiben erhalten. Das lässt sich nicht rückgängig machen.${D ? '' : ' Der Browser fragt gleich nach Schreibzugriff auf den Musikordner.'}</p>` }))) return;
+    const form = await modal({ title: 'Tags in Dateien schreiben', ok: 'Schreiben', body: `<p>Titel, Artist, Album, Genre, Jahr, BPM, Tonart und Kommentar werden in <b>${nf(ok.length)}</b> Audiodatei${ok.length === 1 ? '' : 'en'} geschrieben${ok.length < sel.length ? ` (${nf(sel.length - ok.length)} andere Dateitypen werden übersprungen)` : ''}.</p><p class="mut">Die Originaldateien werden dabei geändert; Cover und fremde Angaben bleiben erhalten. Das lässt sich nicht rückgängig machen.${D ? '' : ' Der Browser fragt gleich nach Schreibzugriff auf den Musikordner.'}</p>
+      <label class="tog"><input type="checkbox" name="serato"><span class="sw"></span><span><span class="tl">Cues für Serato mitschreiben (experimentell)</span><small>Hot Cues und Loops werden zusätzlich so abgelegt, wie Serato sie erwartet – nur bei MP3, WAV und AIFF und nur, wenn die Datei noch keine Serato-Cues enthält. Nicht mit Serato gegengeprüft; bitte zuerst an Kopien ausprobieren.</small></span></label>` });
+    if (!form) return;
+    const serato = form.serato.checked;
     const job = S.busy = { stop: false }, fails = new Map();
-    let done = 0;
+    let done = 0, sWritten = 0, sKept = 0;
     for (let i = 0; i < ok.length && !job.stop; i++) {
       const t = ok[i];
       status(`Tags schreiben ${i + 1} / ${ok.length}: ${t.title}`, i / ok.length);
       try {
         const h = await writableOf(t, true);
         if (!h) throw new Error('kein Schreibzugriff (Ordner über „Musik hinzufügen“ in Chrome oder Edge wählen)');
-        const data = await TagWrite.build(await h.getFile(), t);
+        const opts = { serato };
+        const data = await TagWrite.build(await h.getFile(), t, opts);
+        if (opts.result === 'written') sWritten++; else if (opts.result === 'kept') sKept++;
         const w = await h.createWritable();
         await w.write(data);
         await w.close();
         t.size = data.length; delete t.missing;
         await DB.put('tracks', t);
         done++;
-      } catch (e) { const m = e.message || 'unbekannter Fehler'; fails.set(m, (fails.get(m) || 0) + 1); }
+      } catch (e) { const m = tr(e.message || 'unbekannter Fehler'); fails.set(m, (fails.get(m) || 0) + 1); }
     }
     S.busy = null;
     status();
     dirty();
+    if (serato) toast(`Serato-Cues: in ${nf(sWritten)} Dateien geschrieben, in ${nf(sKept)} vorhandene belassen.`);
     toast(`${nf(done)} Datei${done === 1 ? '' : 'en'} geschrieben.` + (fails.size ? ' Nicht geschrieben: ' + [...fails].map(([m, n]) => `${nf(n)}× ${m}`).join('; ') + '.' : ''), fails.size > 0);
+  }
+
+  /* Fehlende Angaben online ergänzen (MusicBrainz). Gesendet werden nur Artist und Titel, höchstens eine Anfrage pro Sekunde. */
+  async function onlineLookup() {
+    const sel = selected().filter(t => t.title && t.artist && (!t.album || !t.year || !t.genre));
+    if (!sel.length) return toast('In der Auswahl fehlt nichts, was sich ergänzen ließe (Titel und Artist müssen vorhanden sein).', true);
+    if (S.busy) return toast('Bitte warten, es läuft noch ein Vorgang.', true);
+    if (!(await modal({ title: 'Angaben online ergänzen', ok: 'Suchen', body: `<p>Für <b>${nf(sel.length)}</b> Titel werden Artist und Titel an den freien Musikkatalog musicbrainz.org gesendet, um fehlendes Album, Jahr und Genre zu ergänzen.</p><p class="mut">Vorhandene Angaben bleiben unverändert. Die Suche dauert etwa eine Sekunde pro Titel und lässt sich mit Strg/⌘+Z rückgängig machen.</p>` }))) return;
+    const job = S.busy = { stop: false };
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const q = v => String(v).replace(/\((original|extended|radio|club)[^)]*\)/gi, '').replace(/[\\"]/g, ' ').trim();
+    const same = (a, b) => norm(a) === norm(b) || norm(a).includes(norm(b)) || norm(b).includes(norm(a));
+    snap('Online ergänzen', sel);
+    let found = 0, fail = 0;
+    const changed = [];
+    for (let i = 0; i < sel.length && !job.stop; i++) {
+      const t = sel[i];
+      status(`Online-Suche ${i + 1} / ${sel.length}: ${t.title}`, i / sel.length);
+      let data = null;
+      for (let k = 0; k < 3 && !data && !job.stop; k++) {
+        try {
+          const r = await fetch('https://musicbrainz.org/ws/2/recording?fmt=json&limit=25&query=' + encodeURIComponent(`artist:"${q(t.artist)}" AND recording:"${q(t.title)}"`));
+          const j = r.ok ? await r.json() : null;
+          if (j && j.recordings) data = j;
+        } catch { /* Netzfehler: gleich noch einmal */ }
+        await wait(data ? 1100 : 2500);
+      }
+      if (!data) { fail++; continue; }
+      // alle passenden Aufnahmen zusammen betrachten: frühestes Jahr, bevorzugt ein reguläres Album statt Sammlung oder Mitschnitt
+      const recs = data.recordings.filter(r => r.score >= 85 && same(r.title, q(t.title)) && (r['artist-credit'] || []).some(a => same(a.name, t.artist)));
+      if (!recs.length) continue;
+      const rank = r => { const g = r['release-group'] || {}; return (r.status && r.status !== 'Official' ? 20 : 0) + ((g['secondary-types'] || []).length ? 10 : 0) + (g['primary-type'] === 'Album' ? 0 : g['primary-type'] === 'EP' ? 1 : g['primary-type'] === 'Single' ? 2 : 3); };
+      const rel = recs.flatMap(r => r.releases || []).sort((a, b) => rank(a) - rank(b) || String(a.date || '9').localeCompare(String(b.date || '9')))[0];
+      const years = recs.map(r => +(/^\d{4}/.exec(r['first-release-date'] || '') || [0])[0]).filter(Boolean);
+      const year = years.length ? Math.min(...years) : +(/^\d{4}/.exec((rel && rel.date) || '') || [0])[0];
+      const tag = recs.flatMap(r => r.tags || []).sort((a, b) => b.count - a.count)[0];
+      let hit = false;
+      if (!t.album && rel && rel.title) { t.album = rel.title; hit = true; }
+      if (!t.year && year) { t.year = year; hit = true; }
+      if (!t.genre && tag && tag.name) { t.genre = tag.name.replace(/(^|[\s-])\S/g, c => c.toUpperCase()); hit = true; }
+      if (hit) { found++; changed.push(t); }
+    }
+    await saveTracks(changed);
+    S.busy = null;
+    status();
+    dirty();
+    toast(`${nf(found)} von ${nf(sel.length)} Titeln ergänzt.` + (fail ? ` ${nf(fail)} Anfragen sind fehlgeschlagen (Dienst nicht erreichbar oder ausgelastet).` : ''), fail > 0);
   }
 
   /* ---------- Deck ---------- */
@@ -869,7 +924,7 @@
       <button class="btn primary icon big" id="pp" aria-label="Wiedergabe / Pause">${audio.paused ? IC.play : IC.pause}</button>
       ${t.cover ? `<img class="cover" data-cover="${t.id}" alt="">` : ''}
       <div class="dinfo"><div class="dt">${esc(t.title)}</div><div class="da">${esc(t.artist)}</div>
-        <div class="dm"><span id="dtime">${time(audio.currentTime)}</span> / ${time(t.duration)}${t.bpm ? ` · <b>${(Math.round(t.bpm * 10) / 10).toLocaleString('de-DE')}</b> BPM` : ''}${t.key ? ` · <b>${esc(keyShow(t.key))}</b>` : ''}</div></div>
+        <div class="dm"><span id="dtime">${time(audio.currentTime)}</span> / ${time(t.duration)}${t.bpm ? ` · <b>${(Math.round(t.bpm * 10) / 10).toLocaleString(LOC)}</b> BPM` : ''}${t.key ? ` · <b>${esc(keyShow(t.key))}</b>` : ''}</div></div>
       <div class="dwave"><canvas id="wave"></canvas></div>
       <div class="dside"><div class="cues">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => { const c = (t.cues || []).find(x => x.n === n); return `<button class="cue${c ? ' set' : ''}${c && c.len ? ' lp' : ''}${c && S.loop === c ? ' active' : ''}" data-cue="${n}" style="--c:${c ? cueColor(c) : CUE_COLORS[n]}" title="${c ? esc((c.name ? c.name + ' · ' : '') + time2(c.t) + (c.len ? ' · Loop' : '')) + ' · Rechtsklick löscht' : 'Cue an aktueller Position setzen'}">${n + 1}</button>`; }).join('')}</div>
         <div class="row"><button class="btn sm${S.panel ? ' active' : ''}" id="bEdit">Cues &amp; Raster</button><button class="btn sm" id="bMatch" ${t.key ? '' : 'disabled'} title="Passende Titel nach Tonart und Tempo">Passend</button><button class="btn sm${S.zoom ? ' active' : ''}" id="bZoom" title="Ausschnitt um die aktuelle Position">Zoom</button><input type="range" id="vol" min="0" max="1" step="0.01" value="${S.settings.volume}" aria-label="Lautstärke"></div></div>
@@ -930,7 +985,7 @@
       g.fillStyle = `rgba(${ink},.18)`; g.fillRect(0, mid, w, 1);
       g.fillStyle = '#B79A6B'; g.fillRect(0, mid, w * pos, 1);
       g.fillStyle = `rgba(${ink},.7)`; g.font = '12px "Fira Sans", sans-serif'; g.textAlign = 'center';
-      g.fillText('Noch keine Wellenform – Titel analysieren', w / 2, mid - 10);
+      g.fillText(tr('Noch keine Wellenform – Titel analysieren'), w / 2, mid - 10);
     }
     if (dur && t.bpm) { // Taktstriche alle 16 Beats, Tempowechsel hervorgehoben
       g.fillStyle = `rgba(${ink},.16)`;
@@ -1127,6 +1182,7 @@
         S.tracks.set(t.id, t); index(t);
         added++;
       }
+      if (data.played) t.lastPlayed = Math.max(t.lastPlayed || 0, data.played);
       changed.push(t); ids.push(t.id);
     }
     await saveTracks(changed);
@@ -1226,20 +1282,22 @@
     const backups = (await DB.entries('backups')).sort((a, b) => b[0] - a[0]);
     let pick = null;
     const f = await modal({ title: 'Einstellungen',
-      body: `<label class="field"><span class="lbl">Darstellung</span><select class="in" name="theme"><option value="dark">Dunkel</option><option value="light"${S.settings.theme === 'light' ? ' selected' : ''}>Hell</option></select></label>
+      body: `${typeof I18n === 'undefined' ? '' : `<label class="field"><span class="lbl">Sprache / Language</span><select class="in" name="lang">${I18n.langs().map(([c, n]) => `<option class="raw" value="${c}"${I18n.lang === c ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>`}
+        <label class="field"><span class="lbl">Darstellung</span><select class="in" name="theme"><option value="dark">Dunkel</option><option value="light"${S.settings.theme === 'light' ? ' selected' : ''}>Hell</option></select></label>
         <label class="field"><span class="lbl">Tonart-Anzeige</span><select class="in" name="keyMode"><option value="camelot">Quintenzirkel-Nummern (8A, 8B …)</option><option value="musical"${S.settings.keyMode === 'musical' ? ' selected' : ''}>Musikalisch (Am, C …)</option></select></label>
         <label class="tog"><input type="checkbox" name="quantize"${S.settings.quantize ? ' checked' : ''}><span class="sw"></span><span><span class="tl">Cues am Beatraster einrasten</span><small>Neue Cue-Punkte springen auf den nächsten Beat, sobald der Titel analysiert ist.</small></span></label>
         <label class="tog"><input type="checkbox" name="normalize"${S.settings.normalize ? ' checked' : ''}><span class="sw"></span><span><span class="tl">Lautstärke beim Vorhören angleichen</span><small>Laute Titel werden im Deck leiser wiedergegeben. Die Dateien bleiben unverändert.</small></span></label>
         <label class="field"><span class="lbl">Musikordner auf diesem Rechner (für Exporte)</span><input class="in" name="base" value="${esc(S.settings.basePath)}" placeholder="/Users/name/Music/"></label>
         <div class="field"><span class="lbl">Bedienung</span><div><button type="button" class="btn sm" id="keysGo">Tastenkürzel anpassen …</button></div></div>
-        <div class="field"><span class="lbl">Verbundene Ordner</span>${S.roots.map(r => `<div class="mut">${esc(r.name)}</div>`).join('') || '<div class="mut">Noch keine.</div>'}</div>
-        <div class="field"><span class="lbl">Automatische Sicherungen (täglich, die letzten 7)</span>${backups.length ? `<div class="row"><select class="in" id="bkSel">${backups.map(([k, b]) => `<option value="${k}">${new Date(+k).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })} – ${nf(b.tracks.length)} Titel</option>`).join('')}</select><button type="button" class="btn" id="bkGo">Wiederherstellen</button></div>` : '<div class="mut">Noch keine – die erste entsteht beim nächsten Start mit Titeln in der Bibliothek.</div>'}</div>`,
+        <div class="field"><span class="lbl">Verbundene Ordner</span>${S.roots.map(r => `<div class="mut" data-raw>${esc(r.name)}</div>`).join('') || '<div class="mut">Noch keine.</div>'}</div>
+        <div class="field"><span class="lbl">Automatische Sicherungen (täglich, die letzten 7)</span>${backups.length ? `<div class="row"><select class="in" id="bkSel">${backups.map(([k, b]) => `<option value="${k}">${new Date(+k).toLocaleString(LOC, { dateStyle: 'medium', timeStyle: 'short' })} – ${nf(b.tracks.length)} Titel</option>`).join('')}</select><button type="button" class="btn" id="bkGo">Wiederherstellen</button></div>` : '<div class="mut">Noch keine – die erste entsteht beim nächsten Start mit Titeln in der Bibliothek.</div>'}</div>`,
       onOpen: ov => ov.addEventListener('click', e => { if (e.target.closest('#keysGo')) { pick = 'keys'; return $('[data-x]', ov).click(); } if (e.target.closest('#bkGo')) { pick = backups.find(([k]) => String(k) === $('#bkSel', ov).value); $('[data-x]', ov).click(); } }) });
     if (pick === 'keys') return keysDialog();
     if (pick) return restore(pick[1], true).catch(e => toast(e.message, true));
     if (!f) return;
     S.settings.theme = f.theme.value; S.settings.keyMode = f.keyMode.value; S.settings.quantize = f.quantize.checked; S.settings.normalize = f.normalize.checked; S.settings.basePath = f.base.value.trim();
     await saveSettings();
+    if (f.lang && f.lang.value !== I18n.lang) return I18n.set(f.lang.value); // lädt die Seite in der neuen Sprache
     applyTheme(); applyVol();
     refresh(); renderDeck();
   }
@@ -1281,6 +1339,32 @@
     const sets = [];
     let written = 0, note = '';
     if (dir === 'write' && !all.length) throw new Error('In der Bibliothek sind noch keine Titel mit vollständigem Pfad.');
+    if (dir === 'history') { // gespielte Titel der letzten 30 Sitzungen als Playlists „Verlauf / …“
+      const stamp = n => { const m = /(\d{4})[y-](\d\d)[m-](\d\d)/.exec(n); return m ? Date.parse(`${m[1]}-${m[2]}-${m[3]}T12:00:00`) : 0; };
+      const take = async (folder, re) => {
+        const names = (await D.list(folder)).filter(e => !e.dir && re.test(e.name)).map(e => e.name).sort((a, b) => b.localeCompare(a, 'en', { numeric: true })).slice(0, 30);
+        for (const n of names) {
+          const c = await D.readBin(folder + '/' + n);
+          if (!c) continue;
+          const d = await parse(c, n);
+          if (!d.tracks.length) continue;
+          d.played = d.played || stamp(n);
+          const label = d.kind === 'Serato-Verlauf' ? d.lists[0].name : n.replace(/\.[^.]+$/, '');
+          d.lists = [{ name: 'Verlauf / ' + label, refs: d.tracks.map((_, i) => i) }];
+          d.full = false;
+          sets.push(d);
+        }
+      };
+      if (app === 'serato') await take(P.music + '/_Serato_/History/Sessions', /\.session$/i);
+      else if (app === 'vdj') { for (const c of [P.home + '/Library/Application Support/VirtualDJ', P.home + '/AppData/Local/VirtualDJ', P.documents + '/VirtualDJ']) await take(c + '/History', /\.m3u8?$/i); }
+      else if (app === 'traktor') { for (const e of await D.list(P.documents + '/Native Instruments')) if (e.dir && /^Traktor/i.test(e.name)) await take(P.documents + '/Native Instruments/' + e.name + '/History', /\.nml$/i); }
+      else throw new Error('rekordbox legt den Verlauf nicht als lesbare Datei ab. In rekordbox lässt er sich als Playlist exportieren und dann hier importieren.');
+      if (!sets.length) throw new Error('Kein Verlauf dieser DJ-Software gefunden.');
+      let added = 0, merged = 0;
+      for (const d of sets) { const r = await mergeData(d); added += r.added; merged += r.merged; }
+      dirty();
+      return { text: `${nf(sets.length)} Sitzungen eingelesen: ${nf(merged)} bekannte und ${nf(added)} neue Titel.`, note: '' };
+    }
     if (app === 'serato') {
       for (const v of vols) {
         const base = (v || P.music) + '/_Serato_';
@@ -1346,7 +1430,7 @@
   async function syncDialog() {
     const f = await modal({ title: 'Direkter Abgleich mit DJ-Software', ok: 'Ausführen',
       body: `<label class="field"><span class="lbl">Programm</span><select class="in" name="app"><option value="serato">Serato</option><option value="vdj">VirtualDJ</option><option value="traktor">Traktor</option><option value="rekordbox">rekordbox</option></select></label>
-        <label class="field"><span class="lbl">Richtung</span><select class="in" name="dir"><option value="read">Aus der DJ-Software einlesen</option><option value="write">In die DJ-Software schreiben</option></select></label>
+        <label class="field"><span class="lbl">Richtung</span><select class="in" name="dir"><option value="read">Aus der DJ-Software einlesen</option><option value="write">In die DJ-Software schreiben</option><option value="history">Verlauf einlesen (gespielte Titel)</option></select></label>
         <p class="mut">Die DJ-Software sollte dabei geschlossen sein. Vor dem Schreiben wird jede Datei, die ersetzt wird, als Kopie daneben gesichert. Serato erhält die Playlists als Crates, VirtualDJ wird ergänzt statt ersetzt; Traktor und rekordbox übernehmen eine Austauschdatei.</p>` });
     if (!f) return;
     if (S.busy) return toast('Bitte warten, es läuft noch ein Vorgang.', true);
@@ -1430,7 +1514,7 @@
       { l: 'Ins Deck laden', fn: () => load(t) },
       { l: `Analysieren (${nf(sel.length)})`, fn: () => analyze(sel) },
       null, { head: 'Zu Playlist hinzufügen' },
-      ...S.lists.filter(l => l.type === 'list').map(l => ({ l: l.name, fn: () => addToList(l, sel) })),
+      ...S.lists.filter(l => l.type === 'list').map(l => ({ l: l.name, raw: true, fn: () => addToList(l, sel) })),
       { l: 'Neue Playlist aus Auswahl …', fn: () => newList(sel) },
       null,
       { l: inList ? 'Aus Playlist entfernen' : 'Aus Bibliothek entfernen …', fn: removeSelected }
@@ -1576,6 +1660,7 @@
         { head: 'Auswahl bearbeiten' },
         { l: 'Suchen & Ersetzen …', fn: findReplace }, { l: 'Titel/Artist aus Dateiname', fn: fromFileName },
         { l: 'Groß-/Kleinschreibung bereinigen', fn: () => batch('caps') }, { l: 'Artist und Titel tauschen', fn: () => batch('swap') }, { l: 'Leerzeichen bereinigen', fn: () => batch('trim') },
+        { l: 'Album, Jahr und Genre online ergänzen …', fn: onlineLookup },
         { l: 'Tags in Dateien schreiben …', fn: writeTags }, ...(D ? [{ l: 'Dateien umbenennen …', fn: renameFiles }] : []), null,
         { head: 'Bibliothek' },
         { l: 'Dateien prüfen (fehlende finden)', fn: checkFiles }, { l: 'Duplikate anzeigen', fn: () => setView({ type: 'dupes' }) }, { l: 'Duplikate zusammenführen …', fn: mergeDupes }
@@ -1698,6 +1783,7 @@
 
   /* ---------- Start ---------- */
   async function start() {
+    if (typeof I18n !== 'undefined') I18n.start();
     shell();
     try {
       await DB.open();

@@ -239,7 +239,8 @@ const Formats = (() => {
 
   function csvExport(tracks, keyMode) {
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const rows = [['Titel', 'Artist', 'Album', 'Genre', 'Jahr', 'BPM', 'Tonart', 'Dauer (s)', 'Bewertung', 'Tags', 'Kommentar', 'Datei'].map(q).join(';')];
+    const tr = s => typeof I18n === 'undefined' ? s : I18n.t(s);
+    const rows = [['Titel', 'Artist', 'Album', 'Genre', 'Jahr', 'BPM', 'Tonart', 'Dauer (s)', 'Bewertung', 'Tags', 'Kommentar', 'Datei'].map(tr).map(q).join(';')];
     for (const t of tracks) rows.push([t.title, t.artist, t.album, t.genre, t.year || '', t.bpm || '', Keys.show(t.key, keyMode), Math.round(t.duration || 0), t.rating || 0, (t.tags || []).join(', '), t.comment, t.path].map(q).join(';'));
     return '﻿' + rows.join('\r\n') + '\r\n';
   }
@@ -360,6 +361,27 @@ const Formats = (() => {
     return { kind: 'Serato-Crate', tracks, lists: [{ name: name.replace(/\.crate$/i, '').replace(/%%/g, ' / '), refs: tracks.map((_, i) => i) }] };
   }
 
+  /* Verlaufsdatei (_Serato_/History/Sessions/*.session): je gespieltem Titel ein Eintrag mit nummerierten Feldern (2 = Pfad, 28 = Startzeit).
+     Aufbau nach der frei verfügbaren Formatbeschreibung; nicht mit Serato gegengeprüft. */
+  function seratoSession(u8, name) {
+    const tracks = [];
+    let first = 0;
+    for (const [tag, body] of blocks(u8)) {
+      if (tag !== 'oent') continue;
+      for (const [k, adat] of blocks(body)) {
+        if (k !== 'adat') continue;
+        const f = {};
+        for (let o = 0; o + 8 <= adat.length;) { const id = be32(adat, o), len = be32(adat, o + 4); f[id] = adat.subarray(o + 8, o + 8 + len); o += 8 + len; }
+        if (!f[2]) continue;
+        const path = seratoIn(unUtf16(f[2])), fb = Tags.fromName(path.split('/').pop());
+        if (!first && f[28] && f[28].length >= 4) first = be32(f[28], 0) * 1000;
+        tracks.push({ title: f[6] ? unUtf16(f[6]) : fb.title, artist: f[7] ? unUtf16(f[7]) : fb.artist, path, size: 0, cues: [] });
+      }
+    }
+    const label = first ? new Date(first).toISOString().slice(0, 10) : name.replace(/\.session$/i, '');
+    return { kind: 'Serato-Verlauf', played: first || 0, tracks, lists: [{ name: label, refs: tracks.map((_, i) => i) }] };
+  }
+
   /* Eine .crate-Datei je Playlist; gehört in den Ordner _Serato_/Subcrates des Laufwerks. */
   function seratoExport(lists, byId, abs) {
     const used = new Set();
@@ -416,7 +438,7 @@ const Formats = (() => {
 
   async function parseFile(file) {
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-    if (String.fromCharCode(...head) === 'vrsn') return seratoImport(new Uint8Array(await file.arrayBuffer()), file.name);
+    if (String.fromCharCode(...head) === 'vrsn') { const u8 = new Uint8Array(await file.arrayBuffer()); return /\.session$/i.test(file.name) ? seratoSession(u8, file.name) : seratoImport(u8, file.name); }
     return parse(await file.text(), file.name);
   }
 
