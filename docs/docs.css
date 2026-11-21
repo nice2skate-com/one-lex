@@ -1,0 +1,76 @@
+/* DJ KOLJA ONE · Library — Handbuch. Branddesign: Fira Sans, Anthrazit, Off-White, Champagne Bronze */
+@font-face { font-family: "Fira Sans"; font-weight: 300; font-display: swap; src: url(../vendor/fonts/fira-sans-latin-300-normal.woff2) format("woff2"); }
+@font-face { font-family: "Fira Sans"; font-weight: 400; font-display: swap; src: url(../vendor/fonts/fira-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Fira Sans"; font-weight: 500; font-display: swap; src: url(../vendor/fonts/fira-sans-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Fira Sans"; font-weight: 600; font-display: swap; src: url(../vendor/fonts/fira-sans-latin-600-normal.woff2) format("woff2"); }
+
+:root { --anthracite: #111315; --graphite: #1A1D20; --raise: #212529; --offwhite: #F4F0E8; --grey: #B9B5AD; --bronze: #B79A6B; --champagne: #C8AF82; --line: rgba(244, 240, 232, .10); --line2: rgba(244, 240, 232, .18); }
+* { box-sizing: border-box; }
+html { color-scheme: dark; scroll-behavior: smooth; scroll-padding-top: 24px; }
+body { margin: 0; background: var(--anthracite); color: var(--offwhite); font: 400 17px/1.6 "Fira Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 clamp(18px, 4vw, 40px); }
+a { color: var(--champagne); text-underline-offset: 3px; }
+h1, h2, h3, p, ul, ol, figure { margin: 0; }
+h1 { font-size: clamp(2rem, 4.6vw, 3.4rem); font-weight: 600; line-height: 1.1; letter-spacing: -.01em; max-width: 18ch; text-wrap: balance; }
+h2 { font-size: clamp(1.5rem, 2.6vw, 2rem); font-weight: 600; line-height: 1.2; margin-bottom: 16px; }
+h3 { font-size: 1.08rem; font-weight: 600; margin: 22px 0 8px; }
+p + p, p + ul, ul + p, p + figure, figure + p, figure + ul, ul + figure { margin-top: 14px; }
+ul { padding-left: 1.2em; } li { margin: 6px 0; } li::marker { color: var(--bronze); }
+b { font-weight: 600; } em { font-style: normal; color: var(--champagne); }
+code { font: 400 .86em ui-monospace, Menlo, Consolas, monospace; background: var(--raise); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+kbd { font: 500 .82em "Fira Sans", sans-serif; display: inline-block; min-width: 1.9em; text-align: center; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line2); border-bottom-width: 2px; background: var(--raise); }
+.eyebrow { font-size: .74rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--bronze); margin-bottom: 10px; }
+
+/* Kopf */
+.hero { border-bottom: 1px solid var(--line); background: radial-gradient(1200px 500px at 85% -10%, rgba(183, 154, 107, .16), transparent 60%), var(--graphite); padding: clamp(36px, 7vw, 84px) 0 clamp(36px, 6vw, 68px); }
+.logo { height: 22px; width: auto; display: block; margin-bottom: clamp(28px, 5vw, 56px); }
+.lead { font-size: clamp(1.05rem, 1.7vw, 1.3rem); font-weight: 300; color: var(--grey); max-width: 62ch; margin-top: 18px; }
+.jump { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid var(--line2); color: var(--offwhite); text-decoration: none; font-weight: 500; }
+.btn:hover { border-color: var(--bronze); } .btn.primary { background: var(--bronze); border-color: var(--bronze); color: var(--anthracite); font-weight: 600; } .btn.primary:hover { background: var(--champagne); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--champagne); outline-offset: 3px; border-radius: 6px; }
+
+/* Aufbau */
+.layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); align-items: start; }
+.toc { position: sticky; top: 0; max-height: 100vh; overflow: auto; padding: 36px 0; display: flex; flex-direction: column; }
+.toc a { color: var(--grey); text-decoration: none; padding: 5px 0 5px 12px; border-left: 2px solid var(--line); font-size: .94rem; }
+.toc a:hover { color: var(--offwhite); border-left-color: var(--bronze); }
+main { min-width: 0; padding-bottom: 60px; }
+section { padding: clamp(36px, 5vw, 60px) 0; border-bottom: 1px solid var(--line); } section:last-child { border-bottom: 0; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { position: static; max-height: none; padding: 28px 0 0; flex-direction: row; flex-wrap: wrap; gap: 4px 6px; } .toc .eyebrow { width: 100%; } .toc a { border: 1px solid var(--line2); border-radius: 999px; padding: 6px 12px; } }
+
+/* Bilder */
+figure { margin: 22px 0; }
+figure img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line2); box-shadow: 0 18px 50px rgba(0, 0, 0, .45); background: var(--graphite); }
+figcaption { color: var(--grey); font-size: .88rem; margin-top: 10px; }
+.split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: clamp(20px, 3vw, 40px); align-items: start; } .split figure { margin: 0; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.annot { position: relative; }
+.pin { position: absolute; transform: translate(-50%, -50%); width: clamp(20px, 2.6vw, 32px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; background: var(--offwhite); color: var(--anthracite); font-weight: 600; font-size: clamp(.7rem, 1.2vw, .95rem); box-shadow: 0 0 0 3px rgba(17, 19, 21, .7), 0 4px 14px rgba(0, 0, 0, .6); pointer-events: none; }
+.legend { list-style: none; padding: 0; counter-reset: n; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 28px; margin-top: 8px; }
+.legend li { counter-increment: n; position: relative; padding-left: 40px; margin: 0; color: var(--grey); } .legend b { color: var(--offwhite); }
+.legend li::before { content: counter(n); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--offwhite); color: var(--anthracite); font-weight: 600; font-size: .85rem; }
+
+/* Karten, Schritte, Hinweise */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 24px 0 6px; }
+.card { background: var(--graphite); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; } .card h3 { margin-top: 0; color: var(--champagne); } .card p { color: var(--grey); font-size: .96rem; }
+.steps { list-style: none; padding: 0; counter-reset: s; display: grid; gap: 12px; }
+.steps li { counter-increment: s; position: relative; margin: 0; background: var(--graphite); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 18px 74px; }
+.steps li::before { content: counter(s); position: absolute; left: 20px; top: 18px; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--bronze); color: var(--anthracite); font-weight: 600; font-size: 1.1rem; }
+.steps h3 { margin: 0 0 4px; } .steps p { color: var(--grey); }
+.note { margin-top: 20px; border: 1px solid rgba(200, 175, 130, .4); background: rgba(183, 154, 107, .08); border-radius: 12px; padding: 14px 18px; font-size: .96rem; }
+.note.warn { border-color: rgba(201, 106, 90, .55); background: rgba(201, 106, 90, .09); }
+
+/* Tabellen, Fragen */
+.tablewrap { overflow-x: auto; margin-top: 20px; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: .94rem; min-width: 640px; }
+th, td { text-align: left; vertical-align: top; padding: 12px 16px; border-bottom: 1px solid var(--line); } tr:last-child td { border-bottom: 0; }
+th { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--grey); font-weight: 500; background: var(--graphite); } td { color: var(--grey); } td b { color: var(--offwhite); }
+.keys td:first-child { white-space: nowrap; }
+details { border-bottom: 1px solid var(--line); padding: 14px 0; } details p { color: var(--grey); margin-top: 8px; }
+summary { cursor: pointer; font-weight: 500; list-style: none; display: flex; justify-content: space-between; gap: 16px; } summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--bronze); font-size: 1.3rem; line-height: 1; } details[open] summary::after { content: "–"; }
+
+footer { border-top: 1px solid var(--line); padding: 28px 0; color: var(--grey); font-size: .9rem; } footer .wrap { display: flex; align-items: center; gap: 14px; } footer .logo { height: 16px; margin: 0; }
+@media print { body { background: #fff; color: #111; font-size: 11pt; } .toc, .jump { display: none; } .layout { display: block; } .hero { background: #fff; } .logo { filter: brightness(.15); } section { break-inside: avoid-page; } .card, .steps li, th { background: #f4f1ea; } td, .card p, .steps p, .lead, .legend li, figcaption { color: #333; } td b, .legend b { color: #111; } figure img { box-shadow: none; } a { color: #6b5320; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

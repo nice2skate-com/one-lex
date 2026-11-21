@@ -17,6 +17,41 @@ const Tags = (() => {
     try { return new TextDecoder(label).decode(body); } catch { return ''; }
   }
 
+  const imgMime = d => d[0] === 0x89 && d[1] === 0x50 ? 'image/png' : 'image/jpeg';
+  function id3Pic(d, v2) {
+    const enc = d[0];
+    let p = v2 ? 4 : d.indexOf(0, 1) + 1;
+    if (p <= 0) return null;
+    p++; // Bildtyp
+    if (enc === 1 || enc === 2) { while (p + 1 < d.length && (d[p] || d[p + 1])) p += 2; p += 2; }
+    else { while (p < d.length && d[p]) p++; p++; }
+    return p < d.length ? { mime: imgMime(d.subarray(p)), data: d.slice(p) } : null;
+  }
+
+  /* Cues, die Serato in der Datei abgelegt hat (GEOB „Serato Markers2“): Base64-kodierte Liste aus CUE- und LOOP-Einträgen */
+  function seratoMarkers(d) {
+    const key = 'Serato Markers2';
+    let at = -1;
+    for (let i = 0; i + key.length < Math.min(d.length, 200); i++) if (ascii(d, i, key.length) === key) { at = i + key.length + 1; break; }
+    if (at < 0) return null;
+    let b64 = '';
+    for (let i = at + 2; i < d.length && d[i]; i++) { const c = String.fromCharCode(d[i]); if (/[A-Za-z0-9+\/]/.test(c)) b64 += c; }
+    b64 = b64.slice(0, b64.length - (b64.length % 4 === 1 ? 1 : 0));
+    let bin;
+    try { bin = Uint8Array.from(atob(b64 + '='.repeat((4 - b64.length % 4) % 4)), c => c.charCodeAt(0)); } catch { return null; }
+    const cues = [], td = new TextDecoder(), hex = (r, g, b) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+    let p = 2;
+    while (p < bin.length && bin[p]) {
+      let e = p; while (e < bin.length && bin[e]) e++;
+      const type = ascii(bin, p, e - p), len = be32(bin, e + 1), body = bin.subarray(e + 5, e + 5 + len);
+      p = e + 5 + len;
+      const name = o => { let q = o; while (q < body.length && body[q]) q++; return td.decode(body.subarray(o, q)); };
+      if (type === 'CUE' && body.length >= 12 && body[1] < 8) cues.push({ n: body[1], t: be32(body, 2) / 1000, name: name(12), color: hex(body[7], body[8], body[9]) });
+      else if (type === 'LOOP' && body.length >= 20) { const a = be32(body, 2) / 1000, b = be32(body, 6) / 1000; if (b > a) cues.push({ n: -1, t: a, len: Math.round((b - a) * 1000) / 1000, name: name(20) }); }
+    }
+    return cues.length ? cues.sort((a, b) => a.t - b.t) : null;
+  }
+
   function parseId3(u8, out) {
     const ver = u8[3], flags = u8[5], end = Math.min(u8.length, 10 + synch(u8, 6));
     let o = 10;
@@ -30,6 +65,8 @@ const Tags = (() => {
       const size = v2 ? (u8[o + 3] << 16) | (u8[o + 4] << 8) | u8[o + 5] : ver === 4 ? synch(u8, o + 4) : be32(u8, o + 4);
       const data = u8.subarray(o + hdr, Math.min(end, o + hdr + size));
       o += hdr + size;
+      if ((id === 'APIC' || id === 'PIC') && !out.picture && size > 16) { out.picture = id3Pic(data, v2); continue; }
+      if (id === 'GEOB' && !out.cues) { try { const c = seratoMarkers(data); if (c) out.cues = c; } catch { /* unlesbar: ohne Cues weiter */ } continue; }
       const f = MAP[id];
       if (!f || !size) continue;
       if (f === 'comment') {
@@ -46,7 +83,7 @@ const Tags = (() => {
   }
 
   async function readId3(file, head, out, base = 0) {
-    const size = Math.min(10 + synch(head, 6), 4 << 20);
+    const size = Math.min(10 + synch(head, 6), 12 << 20);
     parseId3(await bytes(file, base, base + size), out);
   }
 
@@ -69,7 +106,14 @@ const Tags = (() => {
           const f = MAP[s.slice(0, eq).toUpperCase()];
           if (f && !out[f]) out[f] = s.slice(eq + 1).trim();
         }
-        return;
+      } else if (type === 6 && !out.picture && len < (12 << 20)) {
+        const b = await bytes(file, o + 4, o + 4 + len);
+        let p = 4;
+        p += 4 + be32(b, p); // MIME-Typ
+        p += 4 + be32(b, p); // Beschreibung
+        p += 16;
+        const n = be32(b, p);
+        if (n && p + 4 + n <= b.length) out.picture = { mime: imgMime(b.subarray(p + 4)), data: b.slice(p + 4, p + 4 + n) };
       }
       if (h[0] & 128) return;
       o += 4 + len;
@@ -108,6 +152,14 @@ const Tags = (() => {
       const size = be32(ilst, p);
       if (size < 8) break;
       const name = ascii(ilst, p + 4, 4), f = MAP[name];
+      if (name === 'covr' && !out.picture) {
+        const data = find(ilst.subarray(p + 8, p + size), 'data');
+        if (data && data.length > 24) out.picture = { mime: imgMime(data.subarray(8)), data: data.slice(8) };
+      }
+      if (name === '----' && !out.key) { // frei benannte Angabe, z. B. Tonart
+        const item = ilst.subarray(p + 8, p + size), nm = find(item, 'name'), data = find(item, 'data');
+        if (nm && data && /^initialkey$/i.test(td.decode(nm.subarray(4)))) out.key = td.decode(data.subarray(8)).trim();
+      }
       if (f) {
         const data = find(ilst.subarray(p + 8, p + size), 'data');
         if (data && data.length > 8) {
@@ -161,8 +213,8 @@ const Tags = (() => {
 
   function duration(file) {
     return new Promise(res => {
-      const a = new Audio(), url = URL.createObjectURL(file);
-      const done = v => { URL.revokeObjectURL(url); a.removeAttribute('src'); res(v); };
+      const a = new Audio(), url = file.url || URL.createObjectURL(file);
+      const done = v => { if (!file.url) URL.revokeObjectURL(url); a.removeAttribute('src'); res(v); };
       const timer = setTimeout(() => done(0), 8000);
       a.preload = 'metadata';
       a.onloadedmetadata = () => { clearTimeout(timer); done(isFinite(a.duration) ? a.duration : 0); };
