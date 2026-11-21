@@ -16,7 +16,7 @@
   "build": {
     "appId": "one.djkolja.library",
     "productName": "ONE Library",
-    "files": ["main.js", "preload.js", { "from": "..", "to": "web", "filter": ["index.html", "css/**", "js/**", "assets/**", "vendor/**"] }],
+    "files": ["main.js", "preload.js", { "from": "..", "to": "web", "filter": ["index.html", "css/**", "js/**", "assets/**", "vendor/**", "docs/**"] }],
     "mac": { "category": "public.app-category.music", "target": "dmg" },
     "win": { "target": "nsis" }
   }

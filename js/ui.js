@@ -488,6 +488,7 @@
         <button class="btn" id="bTools">Werkzeuge</button>
         <button class="btn" id="bIO">Import / Export</button>
         <button class="btn ghost" id="bSet">Einstellungen</button>
+        <a class="btn ghost" id="bHelp" href="docs/index.html" target="_blank" rel="noopener">Hilfe</a>
       </header>
       <nav class="side scroll" id="side"></nav>
       <main class="main">
@@ -1159,7 +1160,10 @@
     const byPath = new Map(), bySize = new Map(), byFile = new Map();
     const index = t => { byPath.set(np(t.path), t); if (t.size) bySize.set(base(t.path) + '|' + t.size, t); const k = base(t.path); (byFile.get(k) || byFile.set(k, []).get(k)).push(t); };
     for (const t of S.tracks.values()) index(t);
+    const byName = new Map(); // für Listen ohne Dateipfad (rekordbox-Textexport): Zuordnung über Artist + Titel
+    for (const t of S.tracks.values()) { const k = norm(t.artist) + '|' + norm(t.title); if (!byName.has(k)) byName.set(k, t); }
     const find = d => {
+      if (!d.path) return byName.get(norm(d.artist) + '|' + norm(d.title)) || null;
       const p = np(d.path), name = base(d.path);
       let t = byPath.get(p) || (d.size ? bySize.get(name + '|' + d.size) : null);
       if (t) return t;
@@ -1167,10 +1171,11 @@
       return c.find(x => { const q = np(x.path); return p.endsWith('/' + q) || q.endsWith('/' + p); }) || (c.length === 1 && (!d.size || !c[0].size) ? c[0] : null);
     };
     const changed = [], ids = [];
-    let added = 0, merged = 0;
+    let added = 0, merged = 0, skipped = 0;
     for (const d of data.tracks) {
       delete d.volume;
       let t = find(d);
+      if (!t && !d.path) { skipped++; ids.push(null); continue; } // ohne Pfad und ohne Treffer: nicht als leeren Eintrag anlegen
       if (t) {
         for (const k of ['title', 'artist', 'album', 'genre', 'comment', 'key']) if (!t[k] && d[k]) t[k] = d[k];
         for (const k of ['bpm', 'year', 'rating', 'duration', 'gridStart', 'playCount']) if (!t[k] && d[k]) t[k] = d[k];
@@ -1188,11 +1193,12 @@
     await saveTracks(changed);
     for (const l of data.lists) {
       let nl = S.lists.find(x => x.type === 'list' && x.name === l.name);
-      if (nl) nl.trackIds = [...new Set([...nl.trackIds, ...l.refs.map(i => ids[i])])];
-      else { nl = { id: uid(), type: 'list', name: l.name, trackIds: [...new Set(l.refs.map(i => ids[i]))] }; S.lists.push(nl); }
+      const mine = l.refs.map(i => ids[i]).filter(Boolean);
+      if (nl) nl.trackIds = [...new Set([...nl.trackIds, ...mine])];
+      else { nl = { id: uid(), type: 'list', name: l.name, trackIds: [...new Set(mine)] }; S.lists.push(nl); }
       await saveList(nl);
     }
-    return { added, merged, lists: data.lists.length };
+    return { added, merged, skipped, lists: data.lists.length };
   }
 
   async function importData(files) {
@@ -1203,10 +1209,11 @@
       const sets = [];
       for (const f of files) sets.push(await Formats.parseFile(f));
       sets.sort((a, b) => (b.full ? 1 : 0) - (a.full ? 1 : 0)); // Datenbanken vor Playlists, damit deren Angaben gewinnen
-      let added = 0, merged = 0, lists = 0;
-      for (const data of sets) { const r = await mergeData(data); added += r.added; merged += r.merged; lists += r.lists; }
+      let added = 0, merged = 0, lists = 0, skipped = 0;
+      for (const data of sets) { const r = await mergeData(data); added += r.added; merged += r.merged; lists += r.lists; skipped += r.skipped; }
       dirty();
       toast(`${[...new Set(sets.map(d => d.kind))].join(', ')}: ${nf(added)} neue Titel, ${nf(merged)} abgeglichen, ${nf(lists)} Playlists.`);
+      if (skipped) toast(`${nf(skipped)} Einträge ohne Dateipfad ließen sich keinem Titel der Bibliothek zuordnen.`, true);
       if (added) toast('Zum Abspielen und Analysieren den Musikordner über „Musik hinzufügen“ wählen – die Dateien werden automatisch zugeordnet.');
     } catch (e) { dirty(); toast(e.message || 'Import fehlgeschlagen.', true); }
   }
@@ -1358,7 +1365,11 @@
       if (app === 'serato') await take(P.music + '/_Serato_/History/Sessions', /\.session$/i);
       else if (app === 'vdj') { for (const c of [P.home + '/Library/Application Support/VirtualDJ', P.home + '/AppData/Local/VirtualDJ', P.documents + '/VirtualDJ']) await take(c + '/History', /\.m3u8?$/i); }
       else if (app === 'traktor') { for (const e of await D.list(P.documents + '/Native Instruments')) if (e.dir && /^Traktor/i.test(e.name)) await take(P.documents + '/Native Instruments/' + e.name + '/History', /\.nml$/i); }
-      else throw new Error('rekordbox legt den Verlauf nicht als lesbare Datei ab. In rekordbox lässt er sich als Playlist exportieren und dann hier importieren.');
+      else { // rekordbox: Verlaufslisten dort als Datei exportieren (M3U8 oder TXT) und in diesen Ordner legen
+        const folder = P.documents + '/ONE Library/rekordbox-verlauf';
+        await take(folder, /\.(m3u8?|txt)$/i);
+        if (!sets.length) throw new Error('Kein rekordbox-Verlauf gefunden. In rekordbox die gewünschte Liste unter „Verlauf“ per Rechtsklick als Datei exportieren (M3U8 oder TXT) und hier ablegen: ' + folder);
+      }
       if (!sets.length) throw new Error('Kein Verlauf dieser DJ-Software gefunden.');
       let added = 0, merged = 0;
       for (const d of sets) { const r = await mergeData(d); added += r.added; merged += r.merged; }

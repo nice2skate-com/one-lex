@@ -219,6 +219,32 @@ const Formats = (() => {
     return out.join('\n') + '\n';
   }
 
+  /* Verlaufsdateien am Namen erkennen (z. B. „HISTORY 2026-05-01.m3u8“): Liste unter „Verlauf / …“, Titel gelten als an diesem Tag gespielt */
+  function asHistory(d, name) {
+    if (!/history|verlauf/i.test(name)) return d;
+    const m = /(\d{4})[-_.\/](\d\d)[-_.\/](\d\d)/.exec(name);
+    d.played = m ? Date.parse(`${m[1]}-${m[2]}-${m[3]}T12:00:00`) || 0 : 0;
+    d.lists = d.lists.map(l => ({ ...l, name: 'Verlauf / ' + l.name }));
+    return d;
+  }
+
+  /* rekordbox: als Textdatei exportierte Playlist oder Verlaufsliste (Tabulator-getrennt, Spalten je nach Ansicht).
+     Ohne Spalte „Location“ werden die Titel über Artist und Titel zugeordnet. Nicht mit rekordbox gegengeprüft. */
+  function rekordboxTxt(text, name) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    const head = (lines.shift() || '').split('\t').map(h => h.trim().toLowerCase());
+    const col = (...names) => head.findIndex(h => names.includes(h));
+    const c = { title: col('track title', 'titel', 'track-titel', 'title'), artist: col('artist', 'interpret', 'künstler'), album: col('album'), genre: col('genre'), bpm: col('bpm'),
+      key: col('key', 'tonart'), time: col('time', 'zeit', 'dauer'), path: col('location', 'speicherort', 'ort') };
+    if (c.title < 0) throw new Error(`„${name}“: Format nicht erkannt. Unterstützt: Rekordbox XML, Traktor NML, Serato (database V2, .crate), VirtualDJ (database.xml, .vdjfolder), M3U/M3U8, ONE-Backup (JSON).`);
+    const tracks = lines.map(l => {
+      const f = l.split('\t'), g = i => (i >= 0 && f[i] ? f[i].trim() : ''), tm = /^(\d+):(\d\d)$/.exec(g(c.time));
+      return { title: g(c.title), artist: g(c.artist), album: g(c.album), genre: g(c.genre), bpm: Math.round((parseFloat(g(c.bpm).replace(',', '.')) || 0) * 100) / 100, key: Keys.parse(g(c.key)),
+        duration: tm ? +tm[1] * 60 + +tm[2] : 0, path: g(c.path).replace(/\\/g, '/'), size: 0, cues: [] };
+    }).filter(t => t.title);
+    return asHistory({ kind: 'rekordbox-Liste', tracks, lists: [{ name: name.replace(/\.[^.]+$/, ''), refs: tracks.map((_, i) => i) }] }, name);
+  }
+
   function m3uImport(text, name) {
     const tracks = [];
     let info = null;
@@ -234,7 +260,7 @@ const Formats = (() => {
         info = null;
       }
     }
-    return { kind: 'M3U-Playlist', tracks, lists: [{ name: name.replace(/\.[^.]+$/, ''), refs: tracks.map((_, i) => i) }] };
+    return asHistory({ kind: 'M3U-Playlist', tracks, lists: [{ name: name.replace(/\.[^.]+$/, ''), refs: tracks.map((_, i) => i) }] }, name);
   }
 
   function csvExport(tracks, keyMode) {
@@ -433,12 +459,14 @@ const Formats = (() => {
     if (/<VirtualDJ_Database/.test(head)) return vdjImport(parseXml(text));
     if (/<VirtualFolder/.test(head)) return vdjFolderImport(parseXml(text), name);
     if (/\.m3u8?$/i.test(name) || head.startsWith('#EXTM3U')) return m3uImport(text, name);
+    if (/^#\t/.test(head) || /\.txt$/i.test(name)) return rekordboxTxt(text, name);
     throw new Error(`„${name}“: Format nicht erkannt. Unterstützt: Rekordbox XML, Traktor NML, Serato (database V2, .crate), VirtualDJ (database.xml, .vdjfolder), M3U/M3U8, ONE-Backup (JSON).`);
   }
 
   async function parseFile(file) {
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
     if (String.fromCharCode(...head) === 'vrsn') { const u8 = new Uint8Array(await file.arrayBuffer()); return /\.session$/i.test(file.name) ? seratoSession(u8, file.name) : seratoImport(u8, file.name); }
+    if (head[0] === 0xFF && head[1] === 0xFE) return parse(new TextDecoder('utf-16le').decode(await file.arrayBuffer()), file.name); // rekordbox schreibt Textdateien in UTF-16
     return parse(await file.text(), file.name);
   }
 

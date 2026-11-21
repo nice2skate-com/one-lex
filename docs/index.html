@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111315">
+<meta name="robots" content="noindex">
+<title>Handbuch · DJ KOLJA ONE Library</title>
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <img class="logo" src="../assets/logo.svg" alt="DJ KOLJA ONE">
+    <p class="eyebrow">Library · Handbuch</p>
+    <h1>Deine Musik. Einmal ordnen, überall auflegen.</h1>
+    <p class="lead">ONE Library verwaltet deine Sammlung an einem Ort: Titel analysieren, Tags pflegen, Cues setzen, Playlists bauen – und alles an Serato, VirtualDJ, Traktor und rekordbox übergeben.</p>
+    <p class="jump"><a class="btn primary" href="#schnellstart">Schnellstart in 5 Schritten</a><a class="btn" href="#ueberblick">Die Oberfläche im Überblick</a></p>
+  </div>
+</header>
+
+<div class="wrap layout">
+<nav class="toc" aria-label="Inhalt">
+  <p class="eyebrow">Inhalt</p>
+  <a href="#ueberblick">Überblick</a>
+  <a href="#schnellstart">Schnellstart</a>
+  <a href="#hinzufuegen">Musik hinzufügen</a>
+  <a href="#analyse">Analysieren</a>
+  <a href="#tabelle">Tabelle und Suche</a>
+  <a href="#bearbeiten">Titel bearbeiten</a>
+  <a href="#deck">Deck, Cues und Loops</a>
+  <a href="#raster">Beatraster</a>
+  <a href="#listen">Playlists und Smartlists</a>
+  <a href="#werkzeuge">Werkzeuge</a>
+  <a href="#tags-schreiben">Tags in Dateien schreiben</a>
+  <a href="#austausch">Austausch mit DJ-Software</a>
+  <a href="#desktop">Desktop-App und Abgleich</a>
+  <a href="#sicherung">Sicherung</a>
+  <a href="#einstellungen">Einstellungen</a>
+  <a href="#tasten">Tastenkürzel</a>
+  <a href="#fragen">Fragen und Grenzen</a>
+</nav>
+
+<main>
+
+<section id="ueberblick">
+  <p class="eyebrow">Kurzüberblick</p>
+  <h2>Die Oberfläche auf einen Blick</h2>
+  <p>Alles spielt sich in einem Fenster ab. Links wählst du, <em>was</em> du siehst, in der Mitte steht die Liste, rechts bearbeitest du, und unten hörst du vor.</p>
+  <figure class="annot">
+    <a href="img/03-ueberblick.png"><img src="img/03-ueberblick.png" alt="Hauptfenster mit Seitenleiste, Titelliste, Detailbereich und Deck" width="2960" height="1840"></a>
+    <span class="pin" style="left:30%;top:7.4%">1</span>
+    <span class="pin" style="left:74%;top:7.4%">2</span>
+    <span class="pin" style="left:7.5%;top:26%">3</span>
+    <span class="pin" style="left:44%;top:40%">4</span>
+    <span class="pin" style="left:90%;top:47%">5</span>
+    <span class="pin" style="left:47%;top:93.6%">6</span>
+    <span class="pin" style="left:83%;top:91.8%">7</span>
+  </figure>
+  <ol class="legend">
+    <li><b>Suche</b> – findet Titel, Artist, Genre, Tag, Tonart und BPM, auch mehrere Wörter zugleich.</li>
+    <li><b>Aktionen</b> – Musik hinzufügen, analysieren, Werkzeuge, Import / Export, Einstellungen und diese Hilfe.</li>
+    <li><b>Seitenleiste</b> – feste Ansichten der Bibliothek, deine Playlists, Smartlists und Tags.</li>
+    <li><b>Titelliste</b> – sortierbar per Klick auf die Kopfzeile; Doppelklick lädt ins Deck, Rechtsklick öffnet das Menü.</li>
+    <li><b>Details</b> – Angaben der Auswahl bearbeiten, bei mehreren Titeln gleichzeitig.</li>
+    <li><b>Deck</b> – Vorhören mit Wellenform; ein Klick in die Wellenform springt an die Stelle.</li>
+    <li><b>Cues</b> – acht Hot Cues, „Cues &amp; Raster“ zum Feinschliff, „Passend“ für harmonisch passende Titel, „Zoom“ für die Nahansicht.</li>
+  </ol>
+  <div class="cards">
+    <div class="card"><h3>Deine Dateien bleiben, wo sie sind</h3><p>Die Bibliothek merkt sich nur Angaben <em>über</em> deine Musik. Nichts wird kopiert, verschoben oder hochgeladen.</p></div>
+    <div class="card"><h3>Erst die Bibliothek, dann die Datei</h3><p>Änderungen landen zunächst nur in ONE Library. In die Audiodateien schreibst du sie bewusst mit „Tags in Dateien schreiben“.</p></div>
+    <div class="card"><h3>Zwei Wege zum Starten</h3><p>Im Browser (Chrome oder Edge) oder als Desktop-App. Die Desktop-App kann zusätzlich Dateien umbenennen und direkt mit der DJ-Software abgleichen.</p></div>
+  </div>
+</section>
+
+<section id="schnellstart">
+  <p class="eyebrow">Quick Guide</p>
+  <h2>Schnellstart in 5 Schritten</h2>
+  <ol class="steps">
+    <li><h3>Starten</h3><p><b>Desktop-App:</b> im Ordner <code>desktop</code> einmal <code>npm install</code>, danach <code>npm start</code>.<br><b>Browser:</b> Doppelklick auf <code>start-mac.command</code> oder <code>python3 server.py</code> und <code>http://localhost:8778/</code> öffnen.</p></li>
+    <li><h3>Musikordner hinzufügen</h3><p>Oben auf <b>Musik hinzufügen → Ordner hinzufügen …</b> klicken und deinen Musikordner wählen. Du kannst Ordner auch einfach ins Fenster ziehen.</p></li>
+    <li><h3>Analysieren</h3><p><b>Analysieren → Alle nicht analysierten Titel</b>. Die App ermittelt BPM, Tonart, Beatraster, Wellenform und Energie. Das läuft im Hintergrund; du kannst weiterarbeiten.</p></li>
+    <li><h3>Ordnen</h3><p>Titel anklicken und rechts bewerten, taggen, einfärben. Mit dem <b>+</b> neben „Playlists“ eine Liste anlegen und Titel hineinziehen.</p></li>
+    <li><h3>An die DJ-Software übergeben</h3><p><b>Import / Export → Exportieren …</b> und das Format deiner Software wählen. In der Desktop-App geht es mit <b>Direkter Abgleich</b> ohne Umweg über Dateien.</p></li>
+  </ol>
+  <p class="note"><b>Tipp:</b> Leg vor dem ersten Abgleich eine Kopie der Bibliothek deiner DJ-Software an. ONE Library sichert ersetzte Dateien zwar selbst, aber doppelt hält besser.</p>
+</section>
+
+<section id="hinzufuegen">
+  <p class="eyebrow">Bibliothek</p>
+  <h2>Musik hinzufügen</h2>
+  <div class="split">
+    <div>
+      <p>Über <b>Musik hinzufügen</b> wählst du ganze Ordner oder einzelne Dateien. Unterordner werden mitgelesen. Unterstützt werden MP3, M4A/AAC, FLAC, WAV, AIFF, OGG und Opus.</p>
+      <p>Beim Hinzufügen liest die App vorhandene Tags und Cover. Steht nichts in der Datei, wird der Dateiname nach dem Muster „Artist - Titel“ gelesen. Cues, die Serato in MP3-Dateien abgelegt hat, kommen gleich mit.</p>
+      <p>Fügst du einen Ordner erneut hinzu, entstehen keine Doppelten: Bekannte Dateien werden wiedererkannt und nur neu verbunden. So findest du auch verschobene Dateien wieder.</p>
+    </div>
+    <figure><a href="img/02-hinzufuegen.png"><img src="img/02-hinzufuegen.png" alt="Menü Musik hinzufügen" width="600"></a><figcaption>Ordner oder einzelne Dateien hinzufügen</figcaption></figure>
+  </div>
+  <p class="note"><b>Im Browser:</b> Chrome und Edge merken sich deine Ordner dauerhaft und fragen beim nächsten Start nur kurz nach Zugriff. Firefox und Safari können das nicht – dort wählst du den Ordner nach jedem Start neu.</p>
+</section>
+
+<section id="analyse">
+  <h2>Analysieren</h2>
+  <p>Die Analyse hört jede Datei einmal durch und trägt ein:</p>
+  <ul>
+    <li><b>BPM</b> und den <b>Start des Beatrasters</b> (erster Beat),</li>
+    <li>die <b>Tonart</b>, wahlweise als Quintenzirkel-Nummer (8A) oder musikalisch (Am),</li>
+    <li>die <b>Wellenform</b> für das Deck,</li>
+    <li>die <b>Lautheit</b> und daraus eine geschätzte <b>Energie</b> von 1 bis 10.</li>
+  </ul>
+  <p>Im Menü <b>Analysieren</b> wählst du, ob die Auswahl, alle noch nicht analysierten Titel oder die ganze aktuelle Ansicht neu analysiert wird. Die Ansicht „Nicht analysiert“ in der Seitenleiste zeigt, was noch fehlt.</p>
+  <p class="note"><b>Gut zu wissen:</b> Die Analyse ist ein Vorschlag. Bei Titeln ohne klaren Beat oder mit Tempowechseln lohnt ein Blick ins <a href="#raster">Beatraster</a>. Die Energie ist eine grobe Schätzung und lässt sich von Hand überschreiben.</p>
+</section>
+
+<section id="tabelle">
+  <h2>Tabelle und Suche</h2>
+  <figure><a href="img/04-tabelle.png"><img src="img/04-tabelle.png" alt="Titelliste mit farbigen Tonarten, Bewertung, Tags und Energie" width="2560"></a><figcaption>Tonarten sind farbig – benachbarte Farben passen harmonisch zusammen</figcaption></figure>
+  <div class="split">
+    <div>
+      <ul>
+        <li><b>Sortieren:</b> Klick auf eine Spalte, zweiter Klick dreht die Richtung. Die Sortierung wird je Ansicht gemerkt.</li>
+        <li><b>Spalten wählen:</b> Rechtsklick auf die Kopfzeile. Zusätzlich gibt es Energie, Wiedergaben, zuletzt gespielt, Kommentar, Dateityp, Bitrate und Dateiname.</li>
+        <li><b>Spalten verschieben:</b> Spaltenkopf an eine andere Stelle ziehen.</li>
+        <li><b>Breite ändern:</b> am rechten Rand des Spaltenkopfs ziehen.</li>
+        <li><b>Mehrfachauswahl:</b> Strg/⌘-Klick für einzelne, Umschalt-Klick für einen Bereich, Strg/⌘+A für alle.</li>
+      </ul>
+      <p>Die <b>Suche</b> durchsucht Titel, Artist, Album, Genre, Kommentar, Tags, Tonart und BPM. Mehrere Wörter grenzen ein: <code>techno 8A</code> zeigt Techno-Titel in 8A.</p>
+    </div>
+    <figure><a href="img/15-spalten.png"><img src="img/15-spalten.png" alt="Menü zur Spaltenauswahl" width="900"></a><figcaption>Spalten per Rechtsklick ein- und ausblenden</figcaption></figure>
+  </div>
+</section>
+
+<section id="bearbeiten">
+  <h2>Titel bearbeiten</h2>
+  <figure><a href="img/07-bearbeiten.png"><img src="img/07-bearbeiten.png" alt="Drei ausgewählte Titel und der Detailbereich für Mehrfachbearbeitung" width="2600"></a><figcaption>Mehrere Titel gleichzeitig bearbeiten: Nur was du änderst, wird übernommen</figcaption></figure>
+  <p>Wähle einen oder mehrere Titel und ändere die Angaben rechts im Bereich <b>Details</b>. Bei mehreren Titeln zeigen Felder mit unterschiedlichem Inhalt „(verschiedene)“; ein Feld wird erst überschrieben, wenn du etwas einträgst.</p>
+  <ul>
+    <li><b>Bewertung:</b> Sterne anklicken; ein zweiter Klick auf denselben Stern löscht sie.</li>
+    <li><b>Farbe:</b> ein Farbpunkt vor dem Titel, zum Beispiel für Stimmungen oder Set-Abschnitte.</li>
+    <li><b>Tags:</b> eigene Schlagwörter. Eintippen und Enter drücken; bestehende Tags werden vorgeschlagen. Jeder Tag erscheint in der Seitenleiste als eigene Ansicht.</li>
+    <li><b>Tonart:</b> beide Schreibweisen werden verstanden – <code>8A</code>, <code>Am</code>, <code>F#m</code>.</li>
+  </ul>
+  <p class="note"><b>Rückgängig:</b> Strg/⌘+Z nimmt Bearbeitungen in der Bibliothek zurück, Schritt für Schritt. Der letzte Schritt steht auch oben im Menü „Werkzeuge“.</p>
+</section>
+
+<section id="deck">
+  <p class="eyebrow">Vorhören</p>
+  <h2>Deck, Cues und Loops</h2>
+  <figure><a href="img/05-deck.png"><img src="img/05-deck.png" alt="Deck mit Cover, Wellenform, Cue-Markierungen und Cue-Tasten" width="2960"></a><figcaption>Das Deck: farbige Markierungen sind Hot Cues, das graue Dreieck ein Memory-Cue, der getönte Bereich ein Loop</figcaption></figure>
+  <p>Ein Doppelklick (oder Enter) lädt einen Titel ins Deck. Die Leertaste startet und stoppt, ein Klick in die Wellenform springt.</p>
+  <div class="cards">
+    <div class="card"><h3>Hot Cues</h3><p>Tasten <kbd>1</kbd>–<kbd>8</kbd> oder die Felder rechts: Ist der Platz leer, wird an der aktuellen Stelle ein Cue gesetzt; ist er belegt, springt das Deck dorthin. Rechtsklick oder Umschalt+Ziffer löscht.</p></div>
+    <div class="card"><h3>Memory-Cues</h3><p>Zusätzliche Marken ohne Taste, etwa für Einsätze. Setzen mit <kbd>M</kbd> oder „+ Memory-Cue“.</p></div>
+    <div class="card"><h3>Loops</h3><p>Unter „Cues &amp; Raster“ bekommt ein Cue eine Länge von 4 bis 32 Beats. Ein Klick auf den Cue startet den Loop, ein zweiter beendet ihn.</p></div>
+  </div>
+  <p><b>Vorschlagen</b> setzt Cues an den Stellen, an denen sich der Pegel am stärksten ändert (Start, Einsätze, Break). Das spart Zeit – prüfe die Vorschläge trotzdem kurz.</p>
+  <p><b>Passend</b> zeigt Titel, die zum geladenen passen: gleiche oder benachbarte Tonart und ein Tempo im Bereich von ±6 %.</p>
+  <p>Ist „Cues am Beatraster einrasten“ in den Einstellungen aktiv, landen neue Cues automatisch auf dem nächsten Beat.</p>
+</section>
+
+<section id="raster">
+  <h2>Beatraster</h2>
+  <figure><a href="img/06-deck-raster.png"><img src="img/06-deck-raster.png" alt="Bereich Cues und Raster mit Beatraster-Werkzeugen und Cue-Liste, darunter die gezoomte Wellenform" width="2960"></a><figcaption>„Cues &amp; Raster“ mit Zoom: Jeder Strich ist ein Beat, die langen Striche sind Taktanfänge</figcaption></figure>
+  <p>Stimmt das Raster, sitzen Cues und Loops genau. Öffne <b>Cues &amp; Raster</b> (Taste <kbd>E</kbd>) und schalte den <b>Zoom</b> ein (Taste <kbd>Z</kbd>), um jeden Beat zu sehen.</p>
+  <ul>
+    <li><b>BPM</b> direkt eintragen oder mit <b>÷ 2</b> und <b>× 2</b> korrigieren, wenn das halbe oder doppelte Tempo erkannt wurde.</li>
+    <li><b>◀◀ ◀ ▶ ▶▶</b> verschieben das Raster um 10 oder 1 Millisekunde.</li>
+    <li><b>Beat hier</b> legt einen Beat genau auf die aktuelle Position.</li>
+    <li><b>Klick</b> spielt beim Abspielen einen Ton auf jeden Beat – so hörst du sofort, ob das Raster sitzt.</li>
+    <li><b>Tempowechsel hier</b> lässt ab der aktuellen Stelle ein anderes Tempo gelten, für Titel, die schneller oder langsamer werden.</li>
+  </ul>
+  <p>In der Cue-Liste darunter gibst du Cues Namen, wechselst per Klick auf das Farbfeld die Farbe, stellst die Loop-Länge ein oder löschst sie.</p>
+</section>
+
+<section id="listen">
+  <p class="eyebrow">Ordnen</p>
+  <h2>Playlists und Smartlists</h2>
+  <figure><a href="img/10-playlist.png"><img src="img/10-playlist.png" alt="Playlist in einem Ordner mit eigener Reihenfolge" width="2400"></a><figcaption>Playlists lassen sich in Ordnern bündeln; die Reihenfolge änderst du durch Ziehen</figcaption></figure>
+  <h3>Playlists</h3>
+  <ul>
+    <li><b>Anlegen:</b> das <b>+</b> neben „Playlists“. Ein Name wie <code>Sets / Freitag im Hafen</code> legt die Liste im Ordner „Sets“ ab.</li>
+    <li><b>Füllen:</b> Titel aus der Tabelle auf die Playlist ziehen, oder Rechtsklick → „Zu Playlist hinzufügen“.</li>
+    <li><b>Reihenfolge:</b> in der Playlist Titel an die gewünschte Stelle ziehen. Ein Klick auf die Spalte <b>#</b> stellt die eigene Reihenfolge wieder her, wenn du zwischendurch anders sortiert hast.</li>
+    <li><b>Umbenennen, löschen:</b> Rechtsklick auf die Playlist.</li>
+  </ul>
+  <div class="split">
+    <div>
+      <h3>Smartlists</h3>
+      <p>Smartlists füllen sich selbst nach Regeln und bleiben aktuell, wenn du Titel bewertest oder taggst.</p>
+      <ul>
+        <li><b>Regeln</b> prüfen Felder wie BPM, Genre, Tags, Bewertung, Energie oder „hinzugefügt vor … Tagen“.</li>
+        <li><b>Gruppen</b> erlauben Kombinationen wie „BPM über 125 <em>und</em> (Tag ist Peak <em>oder</em> Energie über 6)“.</li>
+        <li><b>Höchstens</b> begrenzt die Liste, zum Beispiel auf die 10 am längsten nicht gespielten Lieblingstitel.</li>
+      </ul>
+    </div>
+    <figure><a href="img/11-smartlist.png"><img src="img/11-smartlist.png" alt="Smartlist-Editor mit Regel, Gruppe und Obergrenze" width="1200"></a><figcaption>Smartlist mit einer Regel und einer Gruppe</figcaption></figure>
+  </div>
+  <h3>Feste Ansichten</h3>
+  <p>„Neu (30 Tage)“, „Nicht analysiert“, „Zuletzt gespielt“, „Duplikate“ und „Fehlende Dateien“ stehen immer bereit. Darunter findest du jeden vergebenen Tag als eigene Ansicht – Titel lassen sich auch auf einen Tag ziehen.</p>
+</section>
+
+<section id="werkzeuge">
+  <h2>Werkzeuge</h2>
+  <div class="split">
+    <div>
+      <p>Das Menü <b>Werkzeuge</b> bearbeitet die aktuelle Auswahl oder die ganze Bibliothek.</p>
+      <ul>
+        <li><b>Suchen &amp; Ersetzen</b> in Titel, Artist, Album, Genre oder Kommentar – praktisch, um Genres zu vereinheitlichen.</li>
+        <li><b>Titel/Artist aus Dateiname</b> für Dateien ohne Tags.</li>
+        <li><b>Groß-/Kleinschreibung bereinigen</b>, <b>Artist und Titel tauschen</b>, <b>Leerzeichen bereinigen</b>.</li>
+        <li><b>Album, Jahr und Genre online ergänzen</b> – fragt den freien Katalog musicbrainz.org. Gesendet werden nur Artist und Titel der Auswahl; vorhandene Angaben bleiben.</li>
+        <li><b>Tags in Dateien schreiben</b> – siehe <a href="#tags-schreiben">nächster Abschnitt</a>.</li>
+        <li><b>Dateien umbenennen</b> nach Muster (nur Desktop-App).</li>
+        <li><b>Dateien prüfen</b> findet Einträge, deren Datei nicht mehr erreichbar ist.</li>
+        <li><b>Duplikate zusammenführen</b> behält je Titel den besten Eintrag und überträgt Bewertung, Tags, Cues und Playlists. Als Duplikat gilt: gleicher Artist und Titel bei gleicher Länge.</li>
+      </ul>
+    </div>
+    <figure><a href="img/08-werkzeuge.png"><img src="img/08-werkzeuge.png" alt="Menü Werkzeuge" width="760"></a><figcaption>Alle Werkzeuge auf einen Blick</figcaption></figure>
+  </div>
+</section>
+
+<section id="tags-schreiben">
+  <h2>Tags in Dateien schreiben</h2>
+  <div class="split">
+    <div>
+      <p>Damit auch andere Programme deine Angaben sehen, schreibst du sie in die Audiodateien: <b>Werkzeuge → Tags in Dateien schreiben …</b></p>
+      <ul>
+        <li>Geschrieben werden Titel, Artist, Album, Genre, Jahr, BPM, Tonart und Kommentar.</li>
+        <li>Unterstützt sind MP3, FLAC, M4A, WAV und AIFF.</li>
+        <li>Cover und Angaben anderer Programme bleiben erhalten. Dateien mit ungewöhnlichem Tag-Aufbau werden übersprungen statt verändert.</li>
+      </ul>
+      <p><b>Cues für Serato mitschreiben</b> legt Hot Cues und Loops zusätzlich so ab, wie Serato sie erwartet (MP3, WAV, AIFF). Vorhandene Serato-Cues werden nie überschrieben. Die Option ist als experimentell gekennzeichnet.</p>
+    </div>
+    <figure><a href="img/09-tags-schreiben.png"><img src="img/09-tags-schreiben.png" alt="Dialog Tags in Dateien schreiben" width="1050"></a><figcaption>Vor dem Schreiben fragt die App nach</figcaption></figure>
+  </div>
+  <p class="note warn"><b>Achtung:</b> Dieser Schritt ändert deine Originaldateien und lässt sich nicht rückgängig machen. Probier ihn beim ersten Mal an Kopien einiger Dateien aus.</p>
+</section>
+
+<section id="austausch">
+  <p class="eyebrow">DJ-Software</p>
+  <h2>Austausch mit DJ-Software</h2>
+  <div class="split">
+    <div>
+      <p>Unter <b>Import / Export</b> liest und schreibst du die Formate der gängigen Programme. Beim Import kannst du mehrere Dateien auf einmal wählen oder ins Fenster ziehen.</p>
+      <p>Bereits vorhandene Titel werden beim Import erkannt und nur <em>ergänzt</em> – leere Felder werden gefüllt, deine eigenen Angaben nicht überschrieben.</p>
+    </div>
+    <figure><a href="img/13-export.png"><img src="img/13-export.png" alt="Dialog Exportieren mit Formatauswahl" width="1050"></a><figcaption>Export: Format wählen, fertig</figcaption></figure>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Programm</th><th>Importieren</th><th>Exportieren</th><th>Was mitgeht</th></tr></thead>
+    <tbody>
+      <tr><td><b>rekordbox</b></td><td>XML der Sammlung; Playlist- und Verlaufslisten als M3U8 oder TXT</td><td>XML mit Bibliothek und Playlists</td><td>Tags, BPM, Tonart, Beatraster mit Tempowechseln, Hot Cues, Memory-Cues, Loops</td></tr>
+      <tr><td><b>Traktor</b></td><td><code>collection.nml</code> und Verlaufsdateien</td><td>NML mit Bibliothek und Playlists</td><td>Tags, BPM, Tonart, Raster-Start, Cues, Loops</td></tr>
+      <tr><td><b>Serato</b></td><td><code>database V2</code>, <code>.crate</code>, Verlauf; Cues aus MP3-Dateien</td><td>Playlists als Crates (ZIP)</td><td>Playlists. BPM und Tonart über geschriebene Tags, Cues optional beim Tags-Schreiben</td></tr>
+      <tr><td><b>VirtualDJ</b></td><td><code>database.xml</code>, <code>.vdjfolder</code>, M3U</td><td><code>database.xml</code> und Playlists (ZIP)</td><td>Tags, BPM, Tonart, Bewertung, Raster-Start, Cues</td></tr>
+      <tr><td><b>Allgemein</b></td><td>M3U / M3U8</td><td>M3U8 und CSV der aktuellen Ansicht</td><td>Reihenfolge und Dateipfade bzw. eine Tabelle zum Weiterverarbeiten</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><b>Dateipfade im Browser:</b> Der Browser verrät Webseiten keine vollständigen Pfade. Trag deshalb beim Export einmal deinen Musikordner ein (zum Beispiel <code>/Users/name/Music/</code>). In der Desktop-App entfällt das.</p>
+  <h3>Verlauf gespielter Titel</h3>
+  <p>Verlaufsdateien werden als Playlists unter „Verlauf / …“ einsortiert, und die Titel erscheinen unter „Zuletzt gespielt“. Bei rekordbox exportierst du die gewünschte Verlaufsliste dort per Rechtsklick als Datei (M3U8 oder TXT) und importierst sie hier; Dateien mit „HISTORY“ im Namen werden automatisch als Verlauf erkannt.</p>
+</section>
+
+<section id="desktop">
+  <h2>Desktop-App und direkter Abgleich</h2>
+  <div class="split">
+    <div>
+      <p>Die Desktop-App zeigt dieselbe Oberfläche, hat aber vollen Zugriff auf deine Dateien. Zusätzlich bietet sie:</p>
+      <ul>
+        <li><b>Direkter Abgleich</b> (Import / Export → „Direkter Abgleich mit DJ-Software …“): Programm und Richtung wählen, ausführen.</li>
+        <li><b>Verlauf einlesen</b> aus Serato, VirtualDJ, Traktor und – über exportierte Listen – rekordbox.</li>
+        <li><b>Dateien umbenennen</b> nach Muster, etwa <code>%artist% - %title%</code>.</li>
+        <li>Tags schreiben ohne Rückfrage des Browsers.</li>
+      </ul>
+    </div>
+    <figure><a href="img/14-abgleich.png"><img src="img/14-abgleich.png" alt="Dialog Direkter Abgleich mit DJ-Software" width="1050"></a><figcaption>Abgleich in zwei Klicks</figcaption></figure>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Programm</th><th>Einlesen</th><th>Schreiben</th></tr></thead>
+    <tbody>
+      <tr><td><b>Serato</b></td><td>Datenbank und Crates aus <code>_Serato_</code>, auch von externen Laufwerken</td><td>Playlists als Crates in das <code>_Serato_</code> des jeweiligen Laufwerks</td></tr>
+      <tr><td><b>VirtualDJ</b></td><td><code>database.xml</code> und Playlists</td><td>Die Datenbank wird ergänzt, fremde Einträge bleiben stehen; Playlists als M3U</td></tr>
+      <tr><td><b>Traktor</b></td><td><code>collection.nml</code> der neuesten Version</td><td><code>ONE Library.nml</code> im Traktor-Ordner; in Traktor über „Import Another Collection“ einlesen</td></tr>
+      <tr><td><b>rekordbox</b></td><td><code>Dokumente/ONE Library/rekordbox.xml</code></td><td>Dieselbe Datei; in rekordbox einmalig als „rekordbox xml“ eintragen</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note"><b>Sicherheit:</b> Schließ die DJ-Software vor dem Abgleich. Jede Datei, die ersetzt wird, legt die App vorher als Kopie mit der Endung <code>.one-sicherung-…</code> daneben ab.</p>
+</section>
+
+<section id="sicherung">
+  <p class="eyebrow">Sicher ist sicher</p>
+  <h2>Sicherung</h2>
+  <ul>
+    <li><b>Automatisch:</b> Einmal am Tag sichert die App die Bibliothek, die letzten sieben Stände bleiben erhalten. Wiederherstellen unter <b>Einstellungen → Automatische Sicherungen</b>.</li>
+    <li><b>Von Hand:</b> <b>Import / Export → Backup jetzt speichern</b> lädt eine JSON-Datei mit allen Titeln, Listen, Einstellungen und Wellenformen herunter. Dieselbe Datei spielst du über „Importieren“ wieder ein.</li>
+  </ul>
+  <p class="note"><b>Wichtig:</b> Die Bibliothek liegt im Speicher des Browsers bzw. der Desktop-App auf diesem Rechner. Wer den Browser-Speicher löscht oder den Rechner wechselt, braucht die Backup-Datei – speichere sie regelmäßig außerhalb des Rechners.</p>
+</section>
+
+<section id="einstellungen">
+  <h2>Einstellungen</h2>
+  <div class="split">
+    <div>
+      <ul>
+        <li><b>Sprache:</b> Deutsch oder Englisch.</li>
+        <li><b>Darstellung:</b> dunkel oder hell.</li>
+        <li><b>Tonart-Anzeige:</b> Quintenzirkel-Nummern (8A) oder musikalisch (Am).</li>
+        <li><b>Cues am Beatraster einrasten.</b></li>
+        <li><b>Lautstärke beim Vorhören angleichen:</b> Laute Titel werden im Deck leiser gespielt; die Dateien bleiben unverändert.</li>
+        <li><b>Musikordner für Exporte</b> (nur im Browser nötig).</li>
+        <li><b>Tastenkürzel anpassen</b> und <b>Automatische Sicherungen</b>.</li>
+      </ul>
+    </div>
+    <figure><a href="img/16-einstellungen.png"><img src="img/16-einstellungen.png" alt="Dialog Einstellungen" width="1050"></a><figcaption>Einstellungen</figcaption></figure>
+  </div>
+  <figure><a href="img/17-hell.png"><img src="img/17-hell.png" alt="Hauptfenster im hellen Design" width="2960"></a><figcaption>Das helle Design für helle Umgebungen</figcaption></figure>
+</section>
+
+<section id="tasten">
+  <h2>Tastenkürzel</h2>
+  <div class="tablewrap">
+  <table class="keys">
+    <thead><tr><th>Taste</th><th>Wirkung</th><th>Anpassbar</th></tr></thead>
+    <tbody>
+      <tr><td><kbd>Leertaste</kbd></td><td>Wiedergabe / Pause</td><td>ja</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>Auswahl ins Deck laden</td><td>ja</td></tr>
+      <tr><td><kbd>1</kbd> – <kbd>8</kbd></td><td>Hot Cue setzen oder anspringen; mit Umschalt löschen</td><td>nein</td></tr>
+      <tr><td><kbd>M</kbd></td><td>Memory-Cue setzen</td><td>ja</td></tr>
+      <tr><td><kbd>E</kbd></td><td>Cues &amp; Raster öffnen</td><td>ja</td></tr>
+      <tr><td><kbd>Z</kbd></td><td>Wellenform-Zoom</td><td>ja</td></tr>
+      <tr><td><kbd>H</kbd></td><td>Passende Titel anzeigen</td><td>ja</td></tr>
+      <tr><td><kbd>A</kbd></td><td>Auswahl analysieren</td><td>ja</td></tr>
+      <tr><td><kbd>/</kbd> oder <kbd>Strg/⌘</kbd>+<kbd>F</kbd></td><td>Suche</td><td>teils</td></tr>
+      <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Auswahl bewegen; mit Umschalt erweitern</td><td>nein</td></tr>
+      <tr><td><kbd>Strg/⌘</kbd>+<kbd>A</kbd></td><td>Alle Titel der Ansicht auswählen</td><td>nein</td></tr>
+      <tr><td><kbd>Strg/⌘</kbd>+<kbd>Z</kbd></td><td>Rückgängig</td><td>nein</td></tr>
+      <tr><td><kbd>Entf</kbd></td><td>Aus Playlist bzw. Bibliothek entfernen</td><td>nein</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Anpassen unter <b>Einstellungen → Tastenkürzel anpassen …</b>: auf die Taste klicken und die neue drücken.</p>
+</section>
+
+<section id="fragen">
+  <p class="eyebrow">Gut zu wissen</p>
+  <h2>Fragen und Grenzen</h2>
+  <details><summary>Ein Titel ist grau und kursiv – was heißt das?</summary><p>Die Datei ist gerade nicht verbunden: Sie wurde verschoben, das Laufwerk fehlt, oder der Browser hat noch keinen Zugriff. Füg den Ordner über „Musik hinzufügen“ erneut hinzu; die Titel werden automatisch wieder zugeordnet. „Fehlende Dateien“ in der Seitenleiste zeigt alle betroffenen Einträge.</p></details>
+  <details><summary>Werden meine Dateien verändert?</summary><p>Nur, wenn du es ausdrücklich auslöst: mit „Tags in Dateien schreiben“ und – in der Desktop-App – „Dateien umbenennen“. Alles andere ändert nur die Bibliothek.</p></details>
+  <details><summary>Was lässt sich nicht rückgängig machen?</summary><p>Importe, geschriebene Tags und umbenannte Dateien. Für Importe hilft die automatische Sicherung vom Vortag.</p></details>
+  <details><summary>Warum zeigt Serato meine Cues nicht?</summary><p>Serato liest Cues aus den Audiodateien, nicht aus Crates. Aktiviere beim Tags-Schreiben „Cues für Serato mitschreiben“. Die Option ist experimentell; hatte die Datei bereits Serato-Cues, bleiben diese unverändert.</p></details>
+  <details><summary>Kann ich direkt in die rekordbox- oder Traktor-Datenbank schreiben?</summary><p>Nein. Beide verwenden eigene, teils verschlüsselte Datenbanken. Der Weg führt über eine Austauschdatei, die du im jeweiligen Programm einmal einbindest.</p></details>
+  <details><summary>Gibt es Streaming-Dienste oder Engine DJ?</summary><p>Beides ist nicht enthalten.</p></details>
+  <details><summary>Wie genau ist die Analyse?</summary><p>Bei Musik mit klarem Beat liegt sie meist richtig; halbes oder doppeltes Tempo korrigierst du mit ÷ 2 und × 2. Das Raster hat ein festes Tempo, Tempowechsel trägst du von Hand ein.</p></details>
+  <p class="note warn"><b>Stand der Erprobung:</b> Der Austausch mit Serato, VirtualDJ, Traktor und rekordbox ist nach deren Dateiformaten gebaut, aber noch nicht mit jeder Programmversion gegengeprüft. Sichere vor dem ersten Abgleich die Bibliothek deiner DJ-Software.</p>
+</section>
+
+</main>
+</div>
+<footer><div class="wrap"><img class="logo" src="../assets/logo.svg" alt="DJ KOLJA ONE"><span>Library · Handbuch</span></div></footer>
+</body>
+</html>

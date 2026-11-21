@@ -100,7 +100,11 @@ app.whenReady().then(() => {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false } });
   win.setMenuBarVisibility(false);
   handlers(win);
-  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('one://app/docs/')) return { action: 'allow', overrideBrowserWindowOptions: { width: 1180, height: 900, autoHideMenuBar: true, backgroundColor: '#111315', title: 'ONE Library – Handbuch' } };
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('one://app/')) e.preventDefault(); });
   win.loadURL('one://app/index.html');
 });

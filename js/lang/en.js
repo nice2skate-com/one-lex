@@ -4,7 +4,7 @@
   const s = n => (n === '1' ? '' : 's');
   const N = '([\\d.,]+)';
   const KIND = { 'Rekordbox XML': 'Rekordbox XML', 'Traktor NML': 'Traktor NML', 'M3U-Playlist': 'M3U playlist', 'VirtualDJ-Datenbank': 'VirtualDJ database', 'VirtualDJ-Liste': 'VirtualDJ list',
-    'Serato-Datenbank': 'Serato database', 'Serato-Crate': 'Serato crate', 'Serato-Verlauf': 'Serato history' };
+    'Serato-Datenbank': 'Serato database', 'Serato-Crate': 'Serato crate', 'Serato-Verlauf': 'Serato history', 'rekordbox-Liste': 'rekordbox list' };
   const t = x => I18n.t(x);
 
   const exact = {
@@ -98,7 +98,7 @@
     'Kein Verlauf dieser DJ-Software gefunden.': 'No history of this DJ software found.', 'Keine Audiodateien gefunden.': 'No audio files found.', 'Keine Daten dieser DJ-Software gefunden.': 'No data of this DJ software found.',
     'Keine verbundenen Dateien in der Auswahl.': 'No connected files in the selection.', 'Zuerst BPM eintragen oder den Titel analysieren.': 'Enter a BPM or analyse the track first.',
     'Keine weiteren sinnvollen Stellen gefunden.': 'No further suitable positions found.', 'Import fehlgeschlagen.': 'Import failed.', 'Abgleich fehlgeschlagen.': 'Sync failed.',
-    'rekordbox legt den Verlauf nicht als lesbare Datei ab. In rekordbox lässt er sich als Playlist exportieren und dann hier importieren.': 'rekordbox does not store its history as a readable file. You can export it as a playlist in rekordbox and import that here.',
+    'Hilfe': 'Help',
     // Gründe beim Schreiben von Tags
     'Datei ist beschädigt': 'file is damaged', 'Dateityp wird nicht unterstützt': 'file type is not supported', 'Kommentarblock zu groß': 'comment block too large', 'Tag ist beschädigt': 'tag is damaged',
     'Tag-Variante wird nicht unterstützt': 'tag variant is not supported', 'altes Tag-Format (ID3v2.2)': 'old tag format (ID3v2.2)', 'fragmentierte MP4-Dateien werden nicht unterstützt': 'fragmented MP4 files are not supported',
@@ -148,6 +148,8 @@
     [new RegExp(`^${N} Datei(?:en)? geschrieben\\. Ersetzte Dateien wurden vorher als Kopie gesichert\\.$`), (m, n) => `${n} file${s(n)} written. Replaced files were saved as a copy first.`],
     [/^In rekordbox einmalig unter Einstellungen → Erweitert → Datenbank → „rekordbox xml“ diese Datei eintragen: (.*)\. Danach erscheint die Bibliothek dort im Baum unter „rekordbox xml“\.$/, 'In rekordbox, enter this file once under Preferences → Advanced → Database → “rekordbox xml”: $1. The library then appears in the tree under “rekordbox xml”.'],
     [/^Bitte in rekordbox „Datei → Sammlung im xml-Format exportieren“ wählen und hier speichern: (.*)$/, 'In rekordbox, choose “File → Export Collection in xml format” and save it here: $1'],
+    [/^Kein rekordbox-Verlauf gefunden\. In rekordbox die gewünschte Liste unter „Verlauf“ per Rechtsklick als Datei exportieren \(M3U8 oder TXT\) und hier ablegen: (.*)$/, 'No rekordbox history found. In rekordbox, right-click the list you want under “Histories”, export it as a file (M3U8 or TXT) and put it here: $1'],
+    [new RegExp(`^${N} Einträge ohne Dateipfad ließen sich keinem Titel der Bibliothek zuordnen\\.$`), '$1 entries without a file path could not be matched to a track in the library.'],
     [/^In (.*) liegt keine collection\.nml\.$/, 'There is no collection.nml in $1.'],
     [new RegExp(`^Die aktuelle Bibliothek \\(${N} Titel\\) wird durch das Backup \\(${N} Titel\\) ersetzt\\.$`), 'The current library ($1 tracks) will be replaced by the backup ($2 tracks).'],
     [new RegExp(`^(.*) – ${N} Titel$`), '$1 – $2 tracks'],

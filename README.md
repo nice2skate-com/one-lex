@@ -4,6 +4,8 @@ Musikbibliothek für DJs im Branddesign: Titel verwalten, analysieren, in Playli
 
 Statische Web-App ohne Build-Schritt – `index.html` liegt im Wurzelverzeichnis. Alle Daten bleiben lokal im Browser (IndexedDB); Audiodateien werden weder kopiert noch hochgeladen.
 
+**Handbuch mit Bildern, Kurzüberblick und Schnellstart:** [`docs/index.html`](docs/index.html) – in der App über „Hilfe“ erreichbar.
+
 ## Starten
 
 - **Mac:** Doppelklick auf `start-mac.command` (öffnet Chrome unter `http://localhost:8778/`).
@@ -59,6 +61,8 @@ Empfohlen ist Chrome oder Edge: Dort merkt sich die App die gewählten Musikordn
 | VirtualDJ | `database.xml` und `Playlists` | Datenbank wird ergänzt, fremde Einträge bleiben; Playlists als M3U |
 | Traktor | `collection.nml` der neuesten Traktor-Version | `ONE Library.nml` im Traktor-Ordner, in Traktor über „Import Another Collection“ |
 | rekordbox | `Dokumente/ONE Library/rekordbox.xml` (dorthin aus rekordbox exportieren) | dieselbe Datei; in rekordbox einmalig als „rekordbox xml“ eintragen |
+
+Den **Verlauf** gespielter Titel liest die App aus Serato, VirtualDJ und Traktor direkt. Bei rekordbox exportierst du die gewünschte Verlaufsliste dort als Datei (M3U8 oder TXT) nach `Dokumente/ONE Library/rekordbox-verlauf`; im Browser importierst du solche Dateien über „Importieren“.
 
 Jede Datei, die dabei ersetzt wird, wird vorher als Kopie mit der Endung `.one-sicherung-…` daneben abgelegt. Die DJ-Software sollte währenddessen geschlossen sein.
 
