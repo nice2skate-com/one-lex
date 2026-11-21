@@ -36,6 +36,7 @@
   <a href="#tags-schreiben">Tags in Dateien schreiben</a>
   <a href="#austausch">Austausch mit DJ-Software</a>
   <a href="#desktop">Desktop-App und Abgleich</a>
+  <a href="#spotify">Spotify und Einkaufsliste</a>
   <a href="#sicherung">Sicherung</a>
   <a href="#einstellungen">Einstellungen</a>
   <a href="#tasten">Tastenkürzel</a>
@@ -78,7 +79,7 @@
   <p class="eyebrow">Quick Guide</p>
   <h2>Schnellstart in 5 Schritten</h2>
   <ol class="steps">
-    <li><h3>Starten</h3><p><b>Desktop-App:</b> im Ordner <code>desktop</code> einmal <code>npm install</code>, danach <code>npm start</code>.<br><b>Browser:</b> Doppelklick auf <code>start-mac.command</code> oder <code>python3 server.py</code> und <code>http://localhost:8778/</code> öffnen.</p></li>
+    <li><h3>Starten</h3><p><b>Desktop-App:</b> im Ordner <code>desktop</code> einmal <code>npm install</code>, danach <code>npm start</code>.<br><b>Browser:</b> Doppelklick auf <code>start-mac.command</code> oder <code>python3 server.py</code> und <code>http://127.0.0.1:8778/</code> öffnen.</p></li>
     <li><h3>Musikordner hinzufügen</h3><p>Oben auf <b>Musik hinzufügen → Ordner hinzufügen …</b> klicken und deinen Musikordner wählen. Du kannst Ordner auch einfach ins Fenster ziehen.</p></li>
     <li><h3>Analysieren</h3><p><b>Analysieren → Alle nicht analysierten Titel</b>. Die App ermittelt BPM, Tonart, Beatraster, Wellenform und Energie. Das läuft im Hintergrund; du kannst weiterarbeiten.</p></li>
     <li><h3>Ordnen</h3><p>Titel anklicken und rechts bewerten, taggen, einfärben. Mit dem <b>+</b> neben „Playlists“ eine Liste anlegen und Titel hineinziehen.</p></li>
@@ -293,6 +294,43 @@
   <p class="note"><b>Sicherheit:</b> Schließ die DJ-Software vor dem Abgleich. Jede Datei, die ersetzt wird, legt die App vorher als Kopie mit der Endung <code>.one-sicherung-…</code> daneben ab.</p>
 </section>
 
+<section id="spotify">
+  <p class="eyebrow">Streaming</p>
+  <h2>Spotify-Abgleich und Einkaufsliste</h2>
+  <p>Du sammelst Ideen und Musikwünsche in Spotify-Playlists? Der Abgleich zeigt, welche dieser Titel du schon als Datei hast und welche noch fehlen. Gelesen werden nur die Titelangaben deiner Playlists – Musik wird nicht geladen und nicht gestreamt.</p>
+  <div class="split">
+    <div>
+      <h3>Einmalig einrichten</h3>
+      <ol>
+        <li>Auf <a href="https://developer.spotify.com/dashboard">developer.spotify.com/dashboard</a> mit deinem Spotify-Konto anmelden und eine App anlegen (Art: Web API). Das ist kostenlos.</li>
+        <li>In ONE Library <b>Import / Export → Spotify-Playlists abgleichen …</b> öffnen. Der Dialog zeigt eine Adresse – trag sie bei Spotify als „Redirect URI“ ein.</li>
+        <li>Die „Client ID“ der Spotify-App in den Dialog kopieren und auf <b>Verbinden</b> klicken. Spotify fragt einmal, ob die App deine Playlists lesen darf.</li>
+      </ol>
+      <p>Die Verbindung bleibt auf diesem Rechner gespeichert und ist nicht Teil der Backups. Trennen kannst du sie jederzeit im Abgleich-Dialog.</p>
+    </div>
+    <figure><a href="img/18-spotify-verbinden.png"><img src="img/18-spotify-verbinden.png" alt="Dialog Mit Spotify verbinden mit den drei Schritten" width="1100"></a><figcaption>Die drei Schritte stehen auch im Dialog</figcaption></figure>
+  </div>
+  <div class="split">
+    <div>
+      <h3>Abgleichen</h3>
+      <p>Wähle die Playlists aus und klick auf <b>Abgleichen</b>. Für jede Playlist passiert zweierlei:</p>
+      <ul>
+        <li><b>Vorhandene Titel</b> landen in einer Playlist „Spotify / Name“ – in der Reihenfolge von Spotify und bereit für den Export an deine DJ-Software.</li>
+        <li><b>Fehlende Titel</b> kommen auf die <b>Einkaufsliste</b>.</li>
+      </ul>
+      <p>Ein Titel gilt als vorhanden, wenn Titel und Artist übereinstimmen und die Länge passt. Hast du nur eine andere Fassung (Remix, Edit, andere Länge), steht der Titel mit einem Hinweis auf der Einkaufsliste.</p>
+    </div>
+    <figure><a href="img/19-spotify-playlists.png"><img src="img/19-spotify-playlists.png" alt="Auswahl der Spotify-Playlists" width="1100"></a><figcaption>Playlists auswählen</figcaption></figure>
+  </div>
+  <figure><a href="img/20-einkaufsliste.png"><img src="img/20-einkaufsliste.png" alt="Einkaufsliste mit fehlenden Titeln und Shop-Links" width="2880"></a><figcaption>Die Einkaufsliste: fehlende Titel mit Links zur Suche in den Shops</figcaption></figure>
+  <ul>
+    <li><b>Shop-Links</b> öffnen die Suche nach dem Titel bei Beatport, Bandcamp und Amazon sowie den Titel bei Spotify.</li>
+    <li><b>Erneut prüfen</b> nimmt Titel von der Liste, die du inzwischen zur Bibliothek hinzugefügt hast, und sortiert sie in ihre „Spotify / …“-Playlists ein.</li>
+    <li><b>Als CSV speichern</b> exportiert die Liste, etwa zum Abhaken unterwegs. Das <b>×</b> entfernt einen Eintrag.</li>
+  </ul>
+  <p class="note"><b>Im Browser:</b> Spotify erlaubt die Anmeldung nur über die Adresse <code>127.0.0.1</code>. Öffne die App dafür unter <code>http://127.0.0.1:8778/</code> (das Startskript tut das von selbst). Von Spotify selbst zusammengestellte Playlists lassen sich nicht immer abrufen – eigene Playlists schon.</p>
+</section>
+
 <section id="sicherung">
   <p class="eyebrow">Sicher ist sicher</p>
   <h2>Sicherung</h2>
@@ -355,7 +393,7 @@
   <details><summary>Was lässt sich nicht rückgängig machen?</summary><p>Importe, geschriebene Tags und umbenannte Dateien. Für Importe hilft die automatische Sicherung vom Vortag.</p></details>
   <details><summary>Warum zeigt Serato meine Cues nicht?</summary><p>Serato liest Cues aus den Audiodateien, nicht aus Crates. Aktiviere beim Tags-Schreiben „Cues für Serato mitschreiben“. Die Option ist experimentell; hatte die Datei bereits Serato-Cues, bleiben diese unverändert.</p></details>
   <details><summary>Kann ich direkt in die rekordbox- oder Traktor-Datenbank schreiben?</summary><p>Nein. Beide verwenden eigene, teils verschlüsselte Datenbanken. Der Weg führt über eine Austauschdatei, die du im jeweiligen Programm einmal einbindest.</p></details>
-  <details><summary>Gibt es Streaming-Dienste oder Engine DJ?</summary><p>Beides ist nicht enthalten.</p></details>
+  <details><summary>Kann ich Titel aus Spotify abspielen oder auflegen?</summary><p>Nein. Der <a href="#spotify">Spotify-Abgleich</a> liest nur Titelangaben deiner Playlists, um Vorhandenes und Fehlendes zu zeigen. Engine DJ wird nicht unterstützt.</p></details>
   <details><summary>Wie genau ist die Analyse?</summary><p>Bei Musik mit klarem Beat liegt sie meist richtig; halbes oder doppeltes Tempo korrigierst du mit ÷ 2 und × 2. Das Raster hat ein festes Tempo, Tempowechsel trägst du von Hand ein.</p></details>
   <p class="note warn"><b>Stand der Erprobung:</b> Der Austausch mit Serato, VirtualDJ, Traktor und rekordbox ist nach deren Dateiformaten gebaut, aber noch nicht mit jeder Programmversion gegengeprüft. Sichere vor dem ersten Abgleich die Bibliothek deiner DJ-Software.</p>
 </section>

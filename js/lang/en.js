@@ -99,6 +99,25 @@
     'Keine verbundenen Dateien in der Auswahl.': 'No connected files in the selection.', 'Zuerst BPM eintragen oder den Titel analysieren.': 'Enter a BPM or analyse the track first.',
     'Keine weiteren sinnvollen Stellen gefunden.': 'No further suitable positions found.', 'Import fehlgeschlagen.': 'Import failed.', 'Abgleich fehlgeschlagen.': 'Sync failed.',
     'Hilfe': 'Help',
+    // Spotify und Einkaufsliste
+    'Spotify-Playlists abgleichen …': 'Match Spotify playlists …', 'Spotify-Playlists abgleichen': 'Match Spotify playlists', 'Mit Spotify verbinden': 'Connect to Spotify', 'Verbinden': 'Connect', 'Abgleichen': 'Match',
+    'Spotify erlaubt die Anmeldung nur über die Adresse 127.0.0.1. Bitte öffne die App dafür unter:': 'Spotify only allows signing in via the address 127.0.0.1. Please open the app at:',
+    'Der Browser führt die Bibliothek je Adresse getrennt. Sichere sie vorher über „Import / Export → Backup jetzt speichern“ und spiele das Backup unter der neuen Adresse ein.': 'The browser keeps a separate library per address. Save it first via “Import / Export → Save backup now” and restore the backup at the new address.',
+    'Der Abgleich liest die Titelangaben deiner Spotify-Playlists und zeigt, welche Titel du schon hast und welche fehlen. Musik wird dabei nicht geladen.': 'Matching reads the track details of your Spotify playlists and shows which tracks you already have and which are missing. No music is downloaded.',
+    'Auf': 'Sign in at', 'anmelden und eine App anlegen (Art: Web API).': 'and create an app (type: Web API).', 'Dort als „Redirect URI“ genau diese Adresse eintragen:': 'Enter exactly this address there as “Redirect URI”:',
+    'Die „Client ID“ der App hier einfügen.': 'Paste the app’s “Client ID” here.', '32 Zeichen': '32 characters',
+    'Die Verbindung wird nur auf diesem Rechner gespeichert und ist nicht Teil der Backups.': 'The connection is stored on this computer only and is not part of the backups.',
+    'Vorhandene Titel kommen in eine Playlist „Spotify / Name“, fehlende auf die Einkaufsliste.': 'Tracks you have go into a playlist “Spotify / Name”, missing ones onto the shopping list.',
+    'Playlists werden geladen …': 'Loading playlists …', 'Keine Playlists gefunden.': 'No playlists found.', 'Verbindung zu Spotify trennen': 'Disconnect from Spotify', 'Verbindung zu Spotify getrennt.': 'Disconnected from Spotify.',
+    'Keine Playlist ausgewählt.': 'No playlist selected.', 'Warte auf die Anmeldung bei Spotify im Browser …': 'Waiting for the Spotify sign-in in your browser …', 'Nicht mit Spotify verbunden.': 'Not connected to Spotify.',
+    'Spotify ist gerade ausgelastet. Bitte später erneut versuchen.': 'Spotify is busy right now. Please try again later.', 'Die Anmeldung bei Spotify wurde abgebrochen.': 'The Spotify sign-in was cancelled.',
+    'Die Anmeldung bei Spotify ist fehlgeschlagen.': 'The Spotify sign-in failed.', 'Der Abgleich mit Spotify ist fehlgeschlagen.': 'Matching with Spotify failed.',
+    'Einkaufsliste': 'Shopping list', 'Titel aus deinen Spotify-Playlists, die in der Bibliothek fehlen. Die Links öffnen die Suche im jeweiligen Shop.': 'Tracks from your Spotify playlists that are missing from the library. The links open the search in each shop.',
+    'Erneut prüfen': 'Check again', 'Als CSV speichern': 'Save as CSV', 'Spotify abgleichen …': 'Match Spotify …', 'In:': 'In:', 'Von der Einkaufsliste entfernen': 'Remove from shopping list', 'Andere Fassung vorhanden:': 'You have another version:',
+    'Keiner der Titel ist bisher in der Bibliothek.': 'None of the tracks is in the library yet.', '1 Titel ist inzwischen in der Bibliothek und wurde einsortiert.': '1 track is now in the library and has been filed.',
+    'Kein Eintrag passt zur Suche.': 'No entry matches the search.', 'Die Einkaufsliste ist leer.': 'The shopping list is empty.',
+    'Über „Import / Export → Spotify-Playlists abgleichen …“ füllt sie sich mit Titeln, die dir noch fehlen.': 'It fills up via “Import / Export → Match Spotify playlists …” with the tracks you are still missing.',
+    'Spotify-Abgleich': 'Spotify matching', 'Einkaufsliste prüfen': 'check shopping list',
     // Gründe beim Schreiben von Tags
     'Datei ist beschädigt': 'file is damaged', 'Dateityp wird nicht unterstützt': 'file type is not supported', 'Kommentarblock zu groß': 'comment block too large', 'Tag ist beschädigt': 'tag is damaged',
     'Tag-Variante wird nicht unterstützt': 'tag variant is not supported', 'altes Tag-Format (ID3v2.2)': 'old tag format (ID3v2.2)', 'fragmentierte MP4-Dateien werden nicht unterstützt': 'fragmented MP4 files are not supported',
@@ -150,6 +169,11 @@
     [/^Bitte in rekordbox „Datei → Sammlung im xml-Format exportieren“ wählen und hier speichern: (.*)$/, 'In rekordbox, choose “File → Export Collection in xml format” and save it here: $1'],
     [/^Kein rekordbox-Verlauf gefunden\. In rekordbox die gewünschte Liste unter „Verlauf“ per Rechtsklick als Datei exportieren \(M3U8 oder TXT\) und hier ablegen: (.*)$/, 'No rekordbox history found. In rekordbox, right-click the list you want under “Histories”, export it as a file (M3U8 or TXT) and put it here: $1'],
     [new RegExp(`^${N} Einträge ohne Dateipfad ließen sich keinem Titel der Bibliothek zuordnen\\.$`), '$1 entries without a file path could not be matched to a track in the library.'],
+    [new RegExp(`^${N} Titel auf der Einkaufsliste$`), (m, n) => `${n} track${s(n)} on the shopping list`],
+    [new RegExp(`^${N} Titel sind inzwischen in der Bibliothek und wurden einsortiert\\.$`), '$1 tracks are now in the library and have been filed.'],
+    [new RegExp(`^Spotify-Abgleich: ${N} Titel vorhanden, ${N} (?:fehlt und steht|fehlen und stehen) auf der Einkaufsliste\\.$`), 'Spotify matching: $1 tracks found, $2 missing and put on the shopping list.'],
+    [/^Spotify (\d+) \/ (\d+):\s?(.*)$/, 'Spotify $1 / $2: $3'], [/^Spotify meldet einen Fehler \((\d+)\)\.$/, 'Spotify reported an error ($1).'],
+    [/^Die Anmeldung bei Spotify ist fehlgeschlagen: (.*)$/, 'The Spotify sign-in failed: $1'],
     [/^In (.*) liegt keine collection\.nml\.$/, 'There is no collection.nml in $1.'],
     [new RegExp(`^Die aktuelle Bibliothek \\(${N} Titel\\) wird durch das Backup \\(${N} Titel\\) ersetzt\\.$`), 'The current library ($1 tracks) will be replaced by the backup ($2 tracks).'],
     [new RegExp(`^(.*) – ${N} Titel$`), '$1 – $2 tracks'],
@@ -158,5 +182,5 @@
 
   I18n.add('en', { name: 'English', locale: 'en-GB', exact, patterns,
     same: new Set(['DJ KOLJA ONE', 'Library', 'Artist', 'Genre', 'BPM', 'Key', 'Tags', 'Playlists', 'Smartlists', 'Details', 'Album', 'Status', 'Name', 'Format', 'Cues', 'Zoom', 'Plays', 'kbit/s', 'Enter', 'Import / Export',
-      'Sprache / Language', '/Users/name/Music/', 'Serato', 'VirtualDJ', 'Traktor', 'rekordbox', 'OK']) });
+      'Sprache / Language', '/Users/name/Music/', 'Serato', 'VirtualDJ', 'Traktor', 'rekordbox', 'OK', 'Client ID', 'ISRC', 'Spotify']) });
 })();

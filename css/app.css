@@ -169,3 +169,15 @@ body[data-theme=light] .stars s { color: rgba(17, 19, 21, .2); }
 .trow { display: grid; grid-template-columns: 92px 96px 40px 30px; gap: 6px; align-items: center; margin-top: 6px; }
 .krow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); } .krow .btn { min-width: 110px; }
 #keysReset { align-self: flex-start; }
+
+/* Spotify-Abgleich und Einkaufsliste */
+.howto { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 8px; } .howto code, .modal code { font: 400 .84rem ui-monospace, Menlo, monospace; background: var(--anthracite); border: 1px solid var(--line2); border-radius: 6px; padding: 2px 7px; word-break: break-all; user-select: all; }
+.modal a { color: var(--champagne); }
+.splists { max-height: 46vh; overflow: auto; border: 1px solid var(--line2); border-radius: 10px; padding: 4px; }
+.sprow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; } .sprow:hover { background: rgba(244, 240, 232, .05); } .sprow input { accent-color: var(--bronze); width: 16px; height: 16px; } .sprow .n { color: var(--grey); font-size: .82rem; }
+.wish { padding: 0 14px 20px; }
+.wishbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 0; color: var(--grey); font-size: .88rem; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--anthracite); z-index: 1; }
+.wrow { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.wt { font-weight: 500; } .wm, .wn { color: var(--grey); font-size: .86rem; } .wn { font-size: .78rem; margin-top: 2px; }
+.wlinks { display: flex; gap: 6px; flex: none; } .wlinks a { font-size: .8rem; color: var(--champagne); text-decoration: none; border: 1px solid rgba(200, 175, 130, .4); border-radius: 20px; padding: 3px 10px; } .wlinks a:hover { background: rgba(183, 154, 107, .18); }
+.wish .empty { position: static; padding: 60px 24px; }

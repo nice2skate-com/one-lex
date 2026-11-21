@@ -8,8 +8,8 @@ Statische Web-App ohne Build-Schritt – `index.html` liegt im Wurzelverzeichnis
 
 ## Starten
 
-- **Mac:** Doppelklick auf `start-mac.command` (öffnet Chrome unter `http://localhost:8778/`).
-- **Sonst:** `python3 server.py` und `http://localhost:8778/` öffnen.
+- **Mac:** Doppelklick auf `start-mac.command` (öffnet Chrome unter `http://127.0.0.1:8778/`).
+- **Sonst:** `python3 server.py` und `http://127.0.0.1:8778/` öffnen. (Der Browser führt die Bibliothek je Adresse getrennt; wer bisher `localhost` genutzt hat, überträgt sie per Backup.)
 
 ### Desktop-App (empfohlen für die tägliche Arbeit)
 
@@ -39,6 +39,7 @@ Empfohlen ist Chrome oder Edge: Dort merkt sich die App die gewählten Musikordn
 - **Sicherung:** tägliche automatische Sicherung im Browser (die letzten 7, unter „Einstellungen“ wiederherstellbar) und vollständiges Backup als JSON-Datei.
 - **Darstellung:** dunkles und helles Design, anpassbare Tastenkürzel, Sprache Deutsch oder Englisch (Einstellungen; ohne Auswahl richtet sie sich nach der Sprache des Browsers).
 - **Online ergänzen:** fehlendes Album, Jahr und Genre aus dem freien Katalog musicbrainz.org nachtragen (Werkzeuge). Gesendet werden nur Artist und Titel der ausgewählten Titel.
+- **Spotify-Abgleich:** Titelangaben eigener Spotify-Playlists lesen (über eine eigene, kostenlose Entwickler-App bei Spotify), vorhandene Titel in eine Playlist „Spotify / …“ legen und fehlende auf eine Einkaufsliste mit Shop-Links setzen. Es wird keine Musik geladen.
 - **Nur Desktop-App:** Dateien nach Muster umbenennen; direkter Abgleich mit Serato, VirtualDJ, Traktor und rekordbox sowie Einlesen des Verlaufs gespielter Titel aus Serato, VirtualDJ und Traktor (Import / Export → „Direkter Abgleich“).
 - **Austausch:** Import und Export für Rekordbox (XML), Traktor (NML), Serato, VirtualDJ und M3U8; CSV-Export. Loops und Memory-Cues gehen nach Rekordbox und Traktor mit.
 
@@ -74,7 +75,7 @@ Jede Datei, die dabei ersetzt wird, wird vorher als Kopie mit der Endung `.one-s
 - Umbenennen und direkter Abgleich gibt es nur in der Desktop-App.
 - Rückgängig gilt für Bearbeitungen in der Bibliothek, nicht für Importe, geschriebene oder umbenannte Dateien.
 - Im Browser sind keine vollständigen Dateipfade bekannt; für Exporte den Musikordner unter „Einstellungen“ eintragen.
-- Nicht enthalten: Streaming-Dienste. Weitere Sprachen brauchen je eine Datei in `js/lang/` nach dem Vorbild von `en.js`.
+- Kein Streaming: Der Spotify-Abgleich liest nur Titelangaben. Er ist gegen eine nachgebaute Spotify-Schnittstelle getestet, nicht gegen ein echtes Konto. Weitere Sprachen brauchen je eine Datei in `js/lang/` nach dem Vorbild von `en.js`.
 - Der Austausch mit Rekordbox, Traktor, Serato und VirtualDJ ist noch nicht mit der jeweiligen Software gegengeprüft – vor dem ersten Einsatz deren Bibliothek sichern.
 
 ## Aufbau

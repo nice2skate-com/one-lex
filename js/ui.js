@@ -75,7 +75,7 @@
     tracks: new Map(), lists: [], roots: [], files: new Map(),
     view: { type: 'all' }, sel: new Set(), anchor: null, sort: { f: 'added', d: -1 }, q: '', rows: [],
     settings: { keyMode: 'camelot', basePath: '', quantize: true, volume: 0.9, theme: 'dark', normalize: false, cols: { hidden: [], shown: [], order: [], w: {} }, sorts: {}, keys: {} },
-    cur: null, curWave: null, busy: null, dupes: null, loop: null, click: false, panel: false, zoom: false, curHi: null
+    cur: null, curWave: null, busy: null, dupes: null, loop: null, click: false, panel: false, zoom: false, curHi: null, wish: [], spotify: null
   };
   const audio = new Audio();
   let audioUrl = null;
@@ -431,6 +431,7 @@
       case 'recent': { const lim = Date.now() - 30 * 864e5; return all.filter(t => t.added >= lim); }
       case 'unanalyzed': return all.filter(t => !t.analyzed);
       case 'played': return all.filter(t => t.lastPlayed);
+      case 'wishlist': return [];
       case 'dupes': { const d = dupes(); return all.filter(t => d.has(t.id)); }
       case 'missing': return all.filter(isMissing);
       case 'tag': return all.filter(t => (t.tags || []).includes(v.id));
@@ -475,7 +476,7 @@
     $('#tbody').scrollTop = 0;
   }
   function dirty() { S.dupes = null; refresh(); }
-  function refresh() { computeRows(); renderSide(); renderHead(); drawRows(); renderInspector(); renderCount(); }
+  function refresh() { wishStale = true; computeRows(); renderSide(); renderHead(); drawRows(); renderInspector(); renderCount(); }
 
   /* ---------- Rendering ---------- */
   function shell() {
@@ -512,6 +513,7 @@
     if (frac !== undefined) $('#prog i').style.width = Math.round(frac * 100) + '%';
   }
   function renderCount() {
+    if (S.view.type === 'wishlist') { $('#count').textContent = `${nf(S.wish.length)} Titel auf der Einkaufsliste`; return; }
     const dur = S.rows.reduce((a, t) => a + (t.duration || 0), 0);
     $('#count').textContent = `${nf(S.rows.length)} Titel · ${time(dur)}` + (S.sel.size ? ` · ${nf(S.sel.size)} ausgewählt` : '');
   }
@@ -529,7 +531,8 @@
       item('unanalyzed', '', 'Nicht analysiert', all.filter(t => !t.analyzed).length) +
       item('played', '', 'Zuletzt gespielt', all.filter(t => t.lastPlayed).length) +
       item('dupes', '', 'Duplikate', dupes().size) +
-      item('missing', '', 'Fehlende Dateien', all.filter(isMissing).length);
+      item('missing', '', 'Fehlende Dateien', all.filter(isMissing).length) +
+      (S.wish.length || S.spotify || S.view.type === 'wishlist' ? item('wishlist', '', 'Einkaufsliste', S.wish.length) : '');
     if (S.view.type === 'match') h += item('match', S.view.id, 'Passend zum Deck', S.view.type === 'match' ? viewTracks(S.view).length : undefined);
     h += `<div class="sh">Playlists<button class="add" data-new="list" title="Neue Playlist">${IC.plus}</button></div>`;
     // Namen mit „ / “ werden als Ordner dargestellt
@@ -552,6 +555,7 @@
   }
 
   function renderHead() {
+    $('#thead').hidden = S.view.type === 'wishlist';
     const plain = S.sort.f === 'pos';
     $('#thead').innerHTML = COLS.map(c => `<div class="th${S.sort.f === c.f ? ' on' : ''}" data-f="${c.f}"${FIXED_COL(c.f) ? '' : ' draggable="true"'}>${c.f === 'pos' && !plain ? '' : esc(c.l)}${S.sort.f === c.f && c.f !== 'pos' ? (S.sort.d > 0 ? ' ▲' : ' ▼') : ''}${FIXED_COL(c.f) ? '' : '<i class="rz"></i>'}</div>`).join('');
   }
@@ -578,6 +582,7 @@
     }
   }
   function drawRows() {
+    if (S.view.type === 'wishlist') return drawWish();
     const body = $('#tbody'), space = $('#tspace');
     space.style.height = S.rows.length * ROW + 'px';
     if (!S.rows.length) {
@@ -1223,7 +1228,7 @@
   async function backup() {
     const waves = {};
     for (const [id, w] of await DB.entries('waves')) if (!String(id).includes('~')) waves[id] = b64(w);
-    download(`one-library-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ app: 'one-library', version: 1, created: new Date().toISOString(), settings: S.settings, tracks: [...S.tracks.values()], lists: S.lists, waves }), 'application/json');
+    download(`one-library-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ app: 'one-library', version: 1, created: new Date().toISOString(), settings: S.settings, tracks: [...S.tracks.values()], lists: S.lists, wishlist: S.wish, waves }), 'application/json');
   }
   async function restore(data, auto) {
     if (!data || data.app !== 'one-library' || !Array.isArray(data.tracks)) throw new Error('Das ist kein ONE-Library-Backup.');
@@ -1236,6 +1241,7 @@
     await saveSettings();
     applyTheme(); undoStack.length = 0;
     S.tracks = new Map(data.tracks.map(t => [t.id, t])); S.lists = data.lists || [];
+    if (Array.isArray(data.wishlist)) { S.wish = data.wishlist; await DB.put('meta', S.wish, 'wishlist'); }
     unload();
     setView({ type: 'all' });
     toast('Backup eingespielt.');
@@ -1307,6 +1313,204 @@
     if (f.lang && f.lang.value !== I18n.lang) return I18n.set(f.lang.value); // lädt die Seite in der neuen Sprache
     applyTheme(); applyVol();
     refresh(); renderDeck();
+  }
+
+  /* ---------- Spotify: Playlists abgleichen, Einkaufsliste ----------
+     Gelesen werden nur Titelangaben der eigenen Playlists (keine Musik). Die Anmeldung läuft über eine eigene Entwickler-App
+     des Nutzers bei Spotify (Client-ID, Verfahren „Authorization Code mit PKCE“, kein Geheimnis nötig). */
+  const SP = { auth: 'https://accounts.spotify.com/authorize', token: 'https://accounts.spotify.com/api/token', api: 'https://api.spotify.com/v1' };
+  const spRedirect = () => D ? 'http://127.0.0.1:8779/callback' : location.origin + location.pathname;
+  const saveSpotify = () => DB.put('meta', S.spotify, 'spotify');
+  const saveWish = () => DB.put('meta', S.wish, 'wishlist');
+  let wishStale = true;
+
+  async function spToken(params) {
+    const r = await fetch(SP.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || !j.access_token) throw new Error('Die Anmeldung bei Spotify ist fehlgeschlagen' + (j && j.error_description ? ': ' + j.error_description : '.'));
+    S.spotify = { ...S.spotify, access: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000, refresh: j.refresh_token || (S.spotify && S.spotify.refresh) };
+    await saveSpotify();
+  }
+  async function spGet(path) {
+    const s = S.spotify;
+    if (!s || !s.refresh) throw new Error('Nicht mit Spotify verbunden.');
+    if (!s.access || s.exp < Date.now() + 60000) await spToken({ grant_type: 'refresh_token', refresh_token: s.refresh, client_id: s.clientId });
+    for (let k = 0; k < 3; k++) {
+      const r = await fetch(path.startsWith('http') ? path : SP.api + path, { headers: { Authorization: 'Bearer ' + S.spotify.access } });
+      if (r.status === 429) { await new Promise(res => setTimeout(res, (+r.headers.get('Retry-After') || 2) * 1000)); continue; }
+      if (!r.ok) { const e = new Error(`Spotify meldet einen Fehler (${r.status}).`); e.status = r.status; throw e; }
+      return r.json();
+    }
+    throw new Error('Spotify ist gerade ausgelastet. Bitte später erneut versuchen.');
+  }
+  async function spConnect(clientId) {
+    const rnd = crypto.getRandomValues(new Uint8Array(48)), b64u = u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const verifier = b64u(rnd), state = uid();
+    const challenge = b64u(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
+    const url = SP.auth + '?' + new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: spRedirect(), code_challenge_method: 'S256', code_challenge: challenge, scope: 'playlist-read-private playlist-read-collaborative', state });
+    if (!D) { sessionStorage.setItem('one-spotify', JSON.stringify({ clientId, verifier, state })); location.href = url; return false; }
+    status('Warte auf die Anmeldung bei Spotify im Browser …');
+    const q = await D.spotifyAuth(url, 8779).finally(() => status());
+    if (!q || q.state !== state || !q.code) throw new Error('Die Anmeldung bei Spotify wurde abgebrochen.');
+    S.spotify = { clientId };
+    await spToken({ grant_type: 'authorization_code', code: q.code, redirect_uri: spRedirect(), client_id: clientId, code_verifier: verifier });
+    return true;
+  }
+  /* Browser: Rückkehr von der Spotify-Anmeldung (Adresse enthält ?code=…) */
+  async function spotifyReturn() {
+    if (D) return;
+    const q = new URLSearchParams(location.search), raw = sessionStorage.getItem('one-spotify');
+    if (!raw || (!q.get('code') && !q.get('error'))) return;
+    sessionStorage.removeItem('one-spotify');
+    history.replaceState(null, '', location.pathname);
+    const p = JSON.parse(raw);
+    try {
+      if (q.get('error') || q.get('state') !== p.state) throw new Error('Die Anmeldung bei Spotify wurde abgebrochen.');
+      S.spotify = { clientId: p.clientId };
+      await spToken({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: spRedirect(), client_id: p.clientId, code_verifier: p.verifier });
+      renderSide();
+      spotifyDialog();
+    } catch (e) { S.spotify = null; toast(e.message, true); }
+  }
+
+  /* Zuordnung Spotify-Titel → Bibliothek: gleicher Kerntitel und Artist; bei abweichender Fassung (Remix, Edit, Länge) nur als Hinweis */
+  const coreTitle = s => norm(String(s || '').replace(/\s+[-–]\s+.*$/, '').replace(/[([][^)\]]*[)\]]/g, ''));
+  const fullTitle = s => norm(String(s || '').replace(/\b(original mix|original version|remaster(ed)?( \d{4})?|\d{4} remaster(ed)?)\b/gi, ''));
+  function wishMatcher() {
+    const idx = new Map();
+    for (const t of S.tracks.values()) { const k = coreTitle(t.title); if (k) (idx.get(k) || idx.set(k, []).get(k)).push(t); }
+    return w => {
+      const artists = (w.artists || [w.artist]).map(norm).filter(Boolean);
+      const cands = (idx.get(coreTitle(w.title)) || []).filter(t => { const a = norm(t.artist); return !a || artists.some(x => a.includes(x) || x.includes(a)); });
+      if (!cands.length) return { track: null };
+      const near = t => !w.duration || !t.duration || Math.abs(t.duration - w.duration) <= 6;
+      const hit = cands.find(t => fullTitle(t.title) === fullTitle(w.title) && near(t)) || cands.find(t => fullTitle(t.title) === fullTitle(w.title)) || cands.find(near);
+      return hit ? { track: hit } : { track: null, other: cands[0] };
+    };
+  }
+
+  async function spotifySync(picked) {
+    if (S.busy) return toast('Bitte warten, es läuft noch ein Vorgang.', true);
+    const job = S.busy = { stop: false };
+    let have = 0, miss = 0;
+    try {
+      snap('Spotify-Abgleich');
+      const match = wishMatcher(), wish = new Map(S.wish.map(w => [w.id, w]));
+      for (let i = 0; i < picked.length && !job.stop; i++) {
+        const pl = picked[i];
+        status(`Spotify ${i + 1} / ${picked.length}: ${pl.name}`, i / picked.length);
+        const items = [];
+        let url = `/playlists/${pl.id}/tracks?limit=100`;
+        while (url && !job.stop) {
+          let page;
+          try { page = await spGet(url); }
+          catch (e) { if (e.status === 404 && url.includes('/tracks?')) { url = url.replace('/tracks?', '/items?'); continue; } throw e; } // neuere Schnittstelle
+          for (const it of page.items || []) { const tr = it.track || it.item; if (tr && tr.name && tr.type !== 'episode') items.push(tr); }
+          url = page.next;
+        }
+        const ids = [], name = 'Spotify / ' + pl.name;
+        for (const tr of items) {
+          const w = { id: tr.id || tr.uri || tr.name, title: tr.name, artists: (tr.artists || []).map(a => a.name), artist: (tr.artists || []).map(a => a.name).join(', '), album: (tr.album && tr.album.name) || '',
+            year: +(/^\d{4}/.exec((tr.album && tr.album.release_date) || '') || [0])[0], duration: Math.round((tr.duration_ms || 0) / 1000), isrc: (tr.external_ids && tr.external_ids.isrc) || '', url: (tr.external_urls && tr.external_urls.spotify) || '' };
+          const m = match(w);
+          if (m.track) { ids.push(m.track.id); wish.delete(w.id); have++; continue; }
+          const old = wish.get(w.id);
+          wish.set(w.id, { ...w, other: m.other ? m.other.title : '', lists: [...new Set([...((old && old.lists) || []), pl.name])], added: (old && old.added) || Date.now() });
+          miss++;
+        }
+        let l = S.lists.find(x => x.type === 'list' && x.name === name);
+        if (!l) { l = { id: uid(), type: 'list', name, trackIds: [] }; S.lists.push(l); }
+        l.trackIds = [...new Set(ids)];
+        await saveList(l);
+      }
+      S.wish = [...wish.values()];
+      await saveWish();
+    } catch (e) { toast(e.message || 'Der Abgleich mit Spotify ist fehlgeschlagen.', true); S.busy = null; status(); dirty(); return; }
+    S.busy = null;
+    status();
+    toast(`Spotify-Abgleich: ${nf(have)} Titel vorhanden, ${nf(miss)} ${miss === 1 ? 'fehlt und steht' : 'fehlen und stehen'} auf der Einkaufsliste.`);
+    setView({ type: 'wishlist' });
+  }
+
+  async function spotifyDialog() {
+    if (!D && location.hostname !== '127.0.0.1') {
+      const url = 'http://127.0.0.1:' + (location.port || '8778') + location.pathname;
+      return modal({ title: 'Spotify-Playlists abgleichen', ok: '', body: `<p>Spotify erlaubt die Anmeldung nur über die Adresse 127.0.0.1. Bitte öffne die App dafür unter:</p><p><a href="${esc(url)}" data-raw>${esc(url)}</a></p><p class="mut">Der Browser führt die Bibliothek je Adresse getrennt. Sichere sie vorher über „Import / Export → Backup jetzt speichern“ und spiele das Backup unter der neuen Adresse ein.</p>` });
+    }
+    if (!S.spotify || !S.spotify.refresh) {
+      const f = await modal({ title: 'Mit Spotify verbinden', ok: 'Verbinden', wide: true,
+        body: `<p>Der Abgleich liest die Titelangaben deiner Spotify-Playlists und zeigt, welche Titel du schon hast und welche fehlen. Musik wird dabei nicht geladen.</p>
+          <ol class="howto"><li>Auf <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener" data-raw>developer.spotify.com/dashboard</a> anmelden und eine App anlegen (Art: Web API).</li>
+          <li>Dort als „Redirect URI“ genau diese Adresse eintragen: <code data-raw>${esc(spRedirect())}</code></li>
+          <li>Die „Client ID“ der App hier einfügen.</li></ol>
+          <label class="field"><span class="lbl">Client ID</span><input class="in" name="cid" required pattern="[0-9a-fA-F]{32}" placeholder="32 Zeichen" value="${esc((S.spotify && S.spotify.clientId) || '')}" autocomplete="off"></label>
+          <p class="mut">Die Verbindung wird nur auf diesem Rechner gespeichert und ist nicht Teil der Backups.</p>` });
+      if (!f) return;
+      try { if (!(await spConnect(f.cid.value.trim()))) return; } catch (e) { S.spotify = null; return toast(e.message, true); }
+      renderSide();
+    }
+    let lists = [];
+    const f = await modal({ title: 'Spotify-Playlists abgleichen', ok: 'Abgleichen', wide: true,
+      body: `<p class="mut">Vorhandene Titel kommen in eine Playlist „Spotify / Name“, fehlende auf die Einkaufsliste.</p><div id="spLists" class="splists"><div class="hint">Playlists werden geladen …</div></div>
+        <div><button type="button" class="btn sm" id="spOff">Verbindung zu Spotify trennen</button></div>`,
+      onOpen: async ov => {
+        ov.addEventListener('click', async e => { if (e.target.closest('#spOff')) { S.spotify = null; await DB.del('meta', 'spotify'); $('[data-x]', ov).click(); renderSide(); toast('Verbindung zu Spotify getrennt.'); } });
+        try {
+          let url = '/me/playlists?limit=50';
+          while (url) { const p = await spGet(url); lists.push(...(p.items || []).filter(Boolean)); url = p.next; }
+          const box = $('#spLists', ov);
+          if (box) box.innerHTML = lists.map((l, i) => `<label class="sprow"><input type="checkbox" name="pl" value="${i}"><span class="grow" data-raw>${esc(l.name)}</span><span class="n">${nf((l.tracks || l.items || {}).total || 0)}</span></label>`).join('') || '<div class="hint">Keine Playlists gefunden.</div>';
+        } catch (e) { const box = $('#spLists', ov); if (box) box.innerHTML = `<div class="hint warn">${esc(tr(e.message))}</div>`; }
+      } });
+    if (!f) return;
+    const picked = $$('[name=pl]:checked', f).map(c => lists[+c.value]);
+    if (!picked.length) return toast('Keine Playlist ausgewählt.', true);
+    spotifySync(picked);
+  }
+
+  /* Einkaufsliste: eigene Ansicht statt der Titeltabelle */
+  function drawWish() {
+    const space = $('#tspace');
+    if (!wishStale && $('.wish', space)) return;
+    wishStale = false;
+    space.style.height = 'auto';
+    const q = encodeURIComponent, words = S.q.toLowerCase().split(/\s+/).filter(Boolean);
+    const rows = S.wish.filter(w => words.every(x => `${w.title} ${w.artist} ${w.album} ${(w.lists || []).join(' ')}`.toLowerCase().includes(x))).sort((a, b) => a.artist.localeCompare(b.artist, 'de') || a.title.localeCompare(b.title, 'de'));
+    space.innerHTML = `<div class="wish">
+      <div class="wishbar"><span class="grow">Titel aus deinen Spotify-Playlists, die in der Bibliothek fehlen. Die Links öffnen die Suche im jeweiligen Shop.</span>
+        <button class="btn sm" data-wish="check">Erneut prüfen</button><button class="btn sm" data-wish="csv">Als CSV speichern</button><button class="btn sm" data-wish="sync">Spotify abgleichen …</button></div>
+      ${rows.map(w => { const s = q(`${(w.artists || [w.artist])[0] || ''} ${w.title}`.trim()); return `<div class="wrow">
+        <div class="grow"><div class="wt" data-raw>${esc(w.title)}</div><div class="wm" data-raw>${esc([w.artist, w.album, w.year || '', w.duration ? time(w.duration) : ''].filter(Boolean).join(' · '))}</div>
+          <div class="wn"><span>In:</span> <span data-raw>${esc((w.lists || []).join(', '))}</span>${w.other ? ` · <span class="warn">Andere Fassung vorhanden:</span> <span data-raw>${esc(w.other)}</span>` : ''}</div></div>
+        <div class="wlinks"><a class="raw" href="https://www.beatport.com/search?q=${s}" target="_blank" rel="noopener">Beatport</a><a class="raw" href="https://bandcamp.com/search?q=${s}" target="_blank" rel="noopener">Bandcamp</a><a class="raw" href="https://www.amazon.de/s?k=${s}&i=digital-music" target="_blank" rel="noopener">Amazon</a>${w.url ? `<a class="raw" href="${esc(w.url)}" target="_blank" rel="noopener">Spotify</a>` : ''}</div>
+        <button class="btn ghost icon sm" data-wish="del" data-id="${esc(w.id)}" aria-label="Von der Einkaufsliste entfernen">${IC.x}</button></div>`; }).join('') || `<div class="empty">${S.wish.length ? 'Kein Eintrag passt zur Suche.' : 'Die Einkaufsliste ist leer.<br>Über „Import / Export → Spotify-Playlists abgleichen …“ füllt sie sich mit Titeln, die dir noch fehlen.'}</div>`}</div>`;
+  }
+  async function wishAction(what, id) {
+    if (what === 'sync') return spotifyDialog();
+    if (what === 'del') S.wish = S.wish.filter(w => w.id !== id);
+    else if (what === 'csv') {
+      const c = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      return download(`one-library-einkaufsliste-${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + [['Titel', 'Artist', 'Album', 'Jahr', 'Dauer (s)', 'ISRC', 'Playlists', 'Spotify'].map(tr).map(c).join(';'),
+        ...S.wish.map(w => [w.title, w.artist, w.album, w.year || '', w.duration || '', w.isrc, (w.lists || []).join(', '), w.url].map(c).join(';'))].join('\r\n') + '\r\n', 'text/csv');
+    } else if (what === 'check') { // inzwischen hinzugefügte Titel von der Liste nehmen und in ihre Playlists einsortieren
+      const match = wishMatcher(), keep = [];
+      let found = 0;
+      snap('Einkaufsliste prüfen');
+      for (const w of S.wish) {
+        const m = match(w);
+        if (!m.track) { keep.push({ ...w, other: m.other ? m.other.title : '' }); continue; }
+        found++;
+        for (const n of w.lists || []) {
+          let l = S.lists.find(x => x.type === 'list' && x.name === 'Spotify / ' + n);
+          if (!l) { l = { id: uid(), type: 'list', name: 'Spotify / ' + n, trackIds: [] }; S.lists.push(l); }
+          if (!l.trackIds.includes(m.track.id)) { l.trackIds.push(m.track.id); await saveList(l); }
+        }
+      }
+      S.wish = keep;
+      toast(found === 1 ? '1 Titel ist inzwischen in der Bibliothek und wurde einsortiert.' : found ? `${nf(found)} Titel sind inzwischen in der Bibliothek und wurden einsortiert.` : 'Keiner der Titel ist bisher in der Bibliothek.');
+    }
+    await saveWish();
+    refresh();
   }
 
   /* ---------- Desktop-App: Dateien umbenennen, direkter Abgleich ---------- */
@@ -1549,6 +1753,7 @@
 
   function bind() {
     const body = $('#tbody');
+    body.addEventListener('click', e => { const w = e.target.closest('[data-wish]'); if (w) wishAction(w.dataset.wish, w.dataset.id); });
     body.addEventListener('scroll', () => requestAnimationFrame(drawRows));
     new ResizeObserver(() => { fitCols(); drawRows(); drawWave(); }).observe(body);
     // Doppelklick selbst erkennen: die Zeilen werden beim ersten Klick neu gezeichnet, das native dblclick bleibt dann aus
@@ -1680,7 +1885,7 @@
     });
     $('#bIO').addEventListener('click', e => {
       const r = e.currentTarget.getBoundingClientRect();
-      menu(r.left, r.bottom + 4, [{ l: 'Importieren (Rekordbox, Traktor, Serato, VirtualDJ, M3U, Backup) …', fn: () => $('#pickImport').click() }, { l: 'Exportieren …', fn: exportDialog }, null, { l: 'Backup jetzt speichern', fn: backup }, ...(D ? [null, { l: 'Direkter Abgleich mit DJ-Software …', fn: syncDialog }] : [])]);
+      menu(r.left, r.bottom + 4, [{ l: 'Importieren (Rekordbox, Traktor, Serato, VirtualDJ, M3U, Backup) …', fn: () => $('#pickImport').click() }, { l: 'Exportieren …', fn: exportDialog }, null, { l: 'Backup jetzt speichern', fn: backup }, null, { l: 'Spotify-Playlists abgleichen …', fn: spotifyDialog }, ...(D ? [null, { l: 'Direkter Abgleich mit DJ-Software …', fn: syncDialog }] : [])]);
       e.stopPropagation();
     });
     $('#bSet').addEventListener('click', settingsDialog);
@@ -1799,6 +2004,8 @@
     try {
       await DB.open();
       const [tracks, lists, settings, roots, handles] = await Promise.all([DB.all('tracks'), DB.all('lists'), DB.get('meta', 'settings'), DB.get('meta', 'roots'), DB.entries('handles')]);
+      S.wish = (await DB.get('meta', 'wishlist')) || [];
+      S.spotify = (await DB.get('meta', 'spotify')) || null;
       S.tracks = new Map(tracks.map(t => [t.id, t]));
       S.lists = lists;
       S.settings = { ...S.settings, ...(settings || {}) };
@@ -1813,6 +2020,7 @@
     renderDeck();
     refresh();
     requestAnimationFrame(tick);
+    spotifyReturn();
     // Aufräumen: Daten zu entfernten Titeln löschen, danach die tägliche Sicherung
     try {
       for (const store of ['waves', 'covers', 'handles']) {

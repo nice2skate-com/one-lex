@@ -3,7 +3,7 @@
    Lädt dieselbe Oberfläche wie die Web-App und ergänzt echten Dateizugriff: vollständige Pfade,
    Tags schreiben und Dateien umbenennen ohne Browser-Rückfragen, direkter Abgleich mit DJ-Software. */
 const { app, BrowserWindow, dialog, ipcMain, protocol, net, shell } = require('electron');
-const fs = require('fs'), fsp = fs.promises, path = require('path'), os = require('os');
+const fs = require('fs'), fsp = fs.promises, path = require('path'), os = require('os'), http = require('http');
 const { Readable } = require('stream');
 const { pathToFileURL } = require('url');
 
@@ -69,6 +69,21 @@ function handlers(win) {
     await fsp.writeFile(p, typeof data === 'string' ? data : Buffer.from(data));
     return true;
   });
+  // Spotify-Anmeldung: Seite im Standardbrowser öffnen und die Rückmeldung auf einer lokalen Adresse entgegennehmen
+  on('spotifyAuth', (url, port) => new Promise(resolve => {
+    if (!/^https:\/\/accounts\.spotify\.com\//.test(url)) return resolve(null);
+    const finish = v => { clearTimeout(timer); server.close(); resolve(v); };
+    const server = http.createServer((req, res) => {
+      const u = new URL(req.url, 'http://127.0.0.1');
+      if (u.pathname !== '/callback') { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<!doctype html><meta charset="utf-8"><title>ONE Library</title><body style="font:16px system-ui;background:#111315;color:#F4F0E8;display:grid;place-items:center;height:100vh;margin:0"><p>Fertig – dieses Fenster kann geschlossen werden.</p>');
+      finish({ code: u.searchParams.get('code'), state: u.searchParams.get('state'), error: u.searchParams.get('error') });
+    });
+    const timer = setTimeout(() => finish(null), 5 * 60 * 1000);
+    server.on('error', () => { clearTimeout(timer); resolve(null); });
+    server.listen(port, '127.0.0.1', () => shell.openExternal(url));
+  }));
   on('list', async dir => { try { return (await fsp.readdir(dir, { withFileTypes: true })).map(e => ({ name: e.name, dir: e.isDirectory() })); } catch { return []; } });
 }
 
